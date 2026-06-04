@@ -1,0 +1,11 @@
+[project]
+name = "socotest"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pygame-ce>=2.5.7",
+    "pyyaml>=6.0.3",
+    "soco>=0.31.1",
+]

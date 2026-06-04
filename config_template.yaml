@@ -1,0 +1,20 @@
+target_devices:
+  - name: Kitchen
+    required: true
+    main: true
+  - name: Front Room
+    required: true
+  - name: "Family Room (TV)"
+    required: false
+
+display:
+  screen_size: 720
+  defult_font_size: 24
+  large_font_size: 32
+  status_font_size: 14
+  background_image: "assets/background01.png"
+  text_color: [255, 255, 255]
+  text_shadow_color: [0, 0, 0]
+  text_shadow_offset: [2, 2]
+  line_in_track_image: "assets/lineIn01.png"
+  line_in_track_name: "Record Player"

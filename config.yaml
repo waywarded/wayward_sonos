@@ -2,9 +2,9 @@ target_devices:
   - name: Kitchen
     # required: true
     # main: true
-  # - name: Move 2
+  - name: Move 2
     # main: true
-    # required: true
+    required: false
   - name: Front Room
     required: true
     main: true

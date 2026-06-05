@@ -7,7 +7,7 @@ from play_state_display import PlayStateDisplay
 from wp_marquee_text import WPMarqueeText
 
 class WPDisplay:
-    def __init__(self, config, appStatus):
+    def __init__(self, config, appStatus, fullScreen=False):
         self.wpStatus = appStatus
         self.config = config
         self.screenSize = config.get("display", {}).get("screen_size", 720)
@@ -17,9 +17,14 @@ class WPDisplay:
         self.statusFontSize = config.get("display", {}).get("status_font_size", 14)
         self.speakerNameFontSize = config.getSubkey("display","speakerNameFontSize",16)
 
+        displayFlags = 0
+        if (fullScreen):
+            displayFlags |= pygame.FULLSCREEN 
+            displayFlags |= pygame.SCALED
+
         self.wpStatus.updateStatus(f"Initializing pygame (size:{self.screenSize}x{self.screenSize})...")
         pygame.init()
-        self.screen = pygame.display.set_mode((self.screenSize, self.screenSize))
+        self.screen = pygame.display.set_mode((self.screenSize, self.screenSize),flags=displayFlags)
         pygame.display.set_caption("Wayward Sonos")
         self.font = pygame.font.SysFont("Arial", self.defaultFontSize)
         self.trackFont = pygame.font.Font('assets/PublicSans-Bold.ttf', self.largeFontSize)

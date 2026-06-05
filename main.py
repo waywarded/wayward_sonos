@@ -16,6 +16,8 @@ def main():
 	# parse args
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--config', default='config.yaml', help='path to config file')
+	parser.add_argument('-f','--fullscreen',action='store_true')
+
 	args = parser.parse_args()
 	configPath = args.config
 	
@@ -26,7 +28,7 @@ def main():
 	wpStatus.logSilent("Required Devices: " + str(wpConfig.getRequiredDevices()), logging.INFO)
 
 	# Initialize display
-	wpDisplay = WPDisplay(wpConfig, wpStatus)
+	wpDisplay = WPDisplay(wpConfig, wpStatus, fullScreen=args.fullscreen)
 	wpStatus.log("Display initialized.", logging.INFO)
 
 	# initialize soco thread.

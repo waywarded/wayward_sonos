@@ -26,8 +26,12 @@ class WPMarqueeText:
         self.textShadowOffset = config.getSubkey("display", "text_shadow_offset", (2, 2))
         self.isFirst = True
         self.stripParens = stripParens
-        pass
+        self.alpha = 255
+        self.scrollMode = 'scrolling'
     
+    def setScrollMode(self, newScrollMode):
+        self.scrollMode = newScrollMode
+
     def setPosition(self, newPosCenter, newWidth):
         self.posCenter = newPosCenter
         self.widthPx = newWidth
@@ -42,7 +46,6 @@ class WPMarqueeText:
         
         self.isFirst = False
 
-
     def checkScroll(self):
         pxWidth = self.pyFont.size(self.text)
         self.requiresScroll = pxWidth[0] > self.widthPx
@@ -51,6 +54,9 @@ class WPMarqueeText:
     def doStripParens(self, inText):
         clean = re.sub(r'[\(\[][^\)\]]+[\)\]]', '', inText).strip()
         return clean
+
+    def setAlpha(self, newAlpha):
+        self.alpha = newAlpha
 
     def setText(self, newText : str):
         if self.text == newText:
@@ -85,13 +91,19 @@ class WPMarqueeText:
         if self.curOffset >= self.textWidthPx + self.endGapPx:
             self.isFirst = False
             self.resetScroll()
-            
+    
+    def draw_truncated_text(self, screen):
+        text = self.text
+        suffix = '...'
+        while text and self.pyFont.size(text + suffix)[0] > self.widthPx:
+            text = text[:-1]
+        
+        self.draw_centered_text(screen, text + suffix)
 
-    def draw_centered_text(self, screen):
+    def draw_centered_text(self, screen, text):
         if not self.pyFont or not self.text:
             return
 
-        text = self.text
         yPos = self.posCenter[1]
 
         xOff = self.textShadowOffset[0]
@@ -101,9 +113,11 @@ class WPMarqueeText:
         if self.shadow:
             shadow_surf = self.pyFont.render(text, True, self.textShadowColor)
             shadow_rect = shadow_surf.get_rect(center=(screenSize // 2 + xOff, yPos + yOff))
+            shadow_surf.set_alpha(self.alpha)
             screen.blit(shadow_surf, shadow_rect)
         surf = self.pyFont.render(text, True, self.textColor)
         rect = surf.get_rect(center=(screenSize // 2, yPos))
+        surf.set_alpha(self.alpha)
         screen.blit(surf, rect)
 
     
@@ -127,6 +141,9 @@ class WPMarqueeText:
 
     def render(self, screen):
         if not self.requiresScroll:
-            self.draw_centered_text(screen)
+            self.draw_centered_text(screen, self.text)
         else:
-            self.draw_scrolling_text(screen)
+            if self.scrollMode == 'truncate':
+                self.draw_truncated_text(screen)
+            else:
+                self.draw_scrolling_text(screen)

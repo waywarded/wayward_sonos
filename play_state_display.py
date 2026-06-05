@@ -18,7 +18,7 @@ class PlayStateSpectrumBar:
 
 	def update(self, deltaTime, isActive):
 		if not isActive:
-			self.targetHeight = 0
+			self.targetHeight = self.parent.barHeightStopped
 		elif self.curHeight == self.targetHeight:
 				self.chooseNewTargetHeight()
 
@@ -38,6 +38,7 @@ class PlayStateDisplay:
 		self.barCount = 6
 		self.barHeightMax = 25
 		self.barHeightMin = 5
+		self.barHeightStopped = 4
 		self.barWidth = 4
 		self.barGap = 5
 		self.bars = [
@@ -45,9 +46,6 @@ class PlayStateDisplay:
 			for _ in range(self.barCount)
 		]
 
-
-		# self.barSurface = pygame.Surface((self.barWidth,self.barHeightMax))
-		# self.barSurface.fill((128,128,128))
 		gradImage = pygame.image.load('assets/barGradient.png').convert()
 		self.barSurface = pygame.transform.scale(gradImage, (self.barWidth, self.barHeightMax))
 

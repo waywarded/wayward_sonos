@@ -1,15 +1,16 @@
 target_devices:
   - name: Kitchen
-    # required: true
-    # main: true
+    required: true
+    main: false
   - name: Move 2
-    # main: true
-    # required: false
+    main: false
+    required: false
   - name: Front Room
     required: true
     main: true
   - name: "Family Room (TV)"
     required: false
+    main: false
 
 display:
   screen_size: 720

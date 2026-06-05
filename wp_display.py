@@ -15,6 +15,7 @@ class WPDisplay:
         self.largeFontSize = config.get("display", {}).get("large_font_size", 32)
         self.bgImagePath = config.get("display", {}).get("background_image", "assets/background.png")
         self.statusFontSize = config.get("display", {}).get("status_font_size", 14)
+        self.speakerNameFontSize = config.getSubkey("display","speakerNameFontSize",16)
 
         self.wpStatus.updateStatus(f"Initializing pygame (size:{self.screenSize}x{self.screenSize})...")
         pygame.init()
@@ -24,6 +25,8 @@ class WPDisplay:
         self.trackFont = pygame.font.Font('assets/PublicSans-Bold.ttf', self.largeFontSize)
         self.artistFont = pygame.font.Font('assets/PublicSans-Medium.ttf', self.defaultFontSize)
         self.albumFont = pygame.font.Font('assets/PublicSans-MediumItalic.ttf', self.defaultFontSize)
+        self.speakerFont = pygame.font.Font('assets/PublicSans-Medium.ttf', self.speakerNameFontSize)
+        
         self.statusFont = pygame.font.SysFont("Arial", self.statusFontSize)
         
         self.lineInImagePath = config.get("display",{}).get("line_in_track_image", "assets/default.png")
@@ -42,6 +45,7 @@ class WPDisplay:
         self.albumTextItem = WPMarqueeText(config, self, self.albumFont, (self.screenSize//2, 570), self.screenSize//1.5, True, True)
         self.trackTextItem = WPMarqueeText(config, self, self.trackFont, (self.screenSize//2, 120), self.screenSize//1.5, False, True)
         self.artistTextItem = WPMarqueeText(config, self, self.artistFont, (self.screenSize//2, 155), self.screenSize//1.5, False, True)
+        self.speakerTextItem = WPMarqueeText(config, self, self.speakerFont, (self.screenSize//2, 650), self.screenSize//2, False, False)
 
         self.playStateDisplay = PlayStateDisplay(self)
 
@@ -111,14 +115,19 @@ class WPDisplay:
         self.trackTextItem.setText(trackInfo.title)
         self.artistTextItem.setText(trackInfo.artist)
         self.albumTextItem.setText(trackInfo.album)
+        self.speakerTextItem.setText(trackInfo.device_string)
+        self.speakerTextItem.setAlpha(180)
+        self.speakerTextItem.setScrollMode('truncate')
 
         self.trackTextItem.update(deltaTime)
         self.artistTextItem.update(deltaTime)
         self.albumTextItem.update(deltaTime)
+        self.speakerTextItem.update(deltaTime)
 
         self.trackTextItem.render(self.screen)        
         self.artistTextItem.render(self.screen)        
-        self.albumTextItem.render(self.screen)        
+        self.albumTextItem.render(self.screen)
+        self.speakerTextItem.render(self.screen)
 
 
     def renderTrackInfoLineIn(self,trackInfo, deltaTime):
@@ -132,11 +141,17 @@ class WPDisplay:
         self.trackTextItem.update(deltaTime)
         self.trackTextItem.render(self.screen)        
 
+        self.speakerTextItem.setText(trackInfo.device_string)
+        self.speakerTextItem.setAlpha(180)
+        self.speakerTextItem.setScrollMode('truncate')
+        self.speakerTextItem.update(deltaTime)
+        self.speakerTextItem.render(self.screen)
+
     def renderTrackInfo(self, deltaTime):
         trackInfo = self.wpStatus.latestTrackInfo
 
         displayStatePosX = self.screenSize//2
-        displayStatePosY = 630
+        displayStatePosY = 615
 
         if trackInfo:
             if trackInfo.line_in:

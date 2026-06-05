@@ -14,15 +14,18 @@ class NowPlayingInfo:
 	album_art_url: str = ""
 	transport_state: str = "STOPPED"
 	line_in: bool = False
+	device_string :str = ""
+	
 	@classmethod
-	def fromTrackInfo(cls, trackInfo, lineIn = False, transportState = 'STOPPED'):
+	def fromTrackInfo(cls, trackInfo, lineIn = False, transportState = 'STOPPED', deviceString = ""):
 		return cls(
 			title=trackInfo.get("title", "Unknown Title"),
 			artist=trackInfo.get("artist", "Unknown Artist"),
 			album=trackInfo.get("album", "Unknown Album"),
 			album_art_url=trackInfo.get("album_art", ""),
 			transport_state=transportState,
-			line_in = lineIn
+			line_in = lineIn,
+			device_string=deviceString
 		)
 	
 	def isPlaying(self):
@@ -129,6 +132,19 @@ class WPSoco:
 		transportInfo = self.mainDevice.get_current_transport_info()
 		transportState = transportInfo['current_transport_state'] if transportInfo else 'STOPPED'
 
+		# get all speakers attached to main device group
+		deviceStr = ""
+		devSet = set()
+		for dev in self.mainDevice.group:
+			devSet.add(dev.player_name)
+		
+		if len(devSet) > 1:
+			deviceStr = f"{self.mainDevice.player_name} [+{str(len(devSet)-1)}]"
+		else:
+			deviceStr = self.mainDevice.player_name
+			
+		self.status.logSilent(f"current device group:{deviceStr}")
+
 		try:
 			currentVolume = self.mainDevice.volume
 			currentTrack = self.mainDevice.get_current_track_info()
@@ -136,7 +152,7 @@ class WPSoco:
 			self.status.log(f"Fetched current state from main device '{self.mainDevice.player_name}': {str(currentTrack)}", logging.INFO)
 			self.status.logSilent(f"------")
 			self.status.log(f"Current state - Volume: {currentVolume}, Track: {currentTrack.get('title', 'Unknown')}", logging.INFO)
-			self.status.setTrackInfo(NowPlayingInfo.fromTrackInfo(currentTrack,lineIn,transportState))
+			self.status.setTrackInfo(NowPlayingInfo.fromTrackInfo(currentTrack,lineIn,transportState, deviceString=deviceStr))
 		except Exception as e:
 			self.status.log(f"Error fetching state: {e}", logging.ERROR)
 

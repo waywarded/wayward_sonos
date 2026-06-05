@@ -47,9 +47,9 @@ class WPDisplay:
         self.textShadowColor = config.getSubkey("display", "text_shadow_color", (0, 0, 0))
         self.textShadowOffset = config.getSubkey("display", "text_shadow_offset", (2, 2))
 
+        self.trackTextItem = WPMarqueeText(config, self, self.trackFont, (self.screenSize//2, 114), self.screenSize//1.5, False, True)
+        self.artistTextItem = WPMarqueeText(config, self, self.artistFont, (self.screenSize//2, 152), self.screenSize//1.5, False, True)
         self.albumTextItem = WPMarqueeText(config, self, self.albumFont, (self.screenSize//2, 570), self.screenSize//1.5, True, True)
-        self.trackTextItem = WPMarqueeText(config, self, self.trackFont, (self.screenSize//2, 120), self.screenSize//1.5, False, True)
-        self.artistTextItem = WPMarqueeText(config, self, self.artistFont, (self.screenSize//2, 155), self.screenSize//1.5, False, True)
         self.speakerTextItem = WPMarqueeText(config, self, self.speakerFont, (self.screenSize//2, 650), self.screenSize//2, False, False)
 
         self.playStateDisplay = PlayStateDisplay(self)

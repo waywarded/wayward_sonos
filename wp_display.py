@@ -221,6 +221,11 @@ class WPDisplay:
                 if event.type == pygame.QUIT:
                     self.running = False
 
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
+                        pygame.quit()
+                        sys.exit()
+
             self.render(dt)
             
         self.wpStatus.updateStatus("Shutting down display...")

@@ -1,7 +1,7 @@
 import soco
 import yaml
 from wp_config import WPConfig
-from wp_app_status import WPAppStatus
+from wp_app_status import WPAppStatus, WpAppState
 from wp_display import WPDisplay
 from wp_soco import WPSoco
 import logging
@@ -23,6 +23,7 @@ def main():
 	
 	# Load config
 	wpStatus.updateStatus(f"Initializing from {configPath}")
+	wpStatus.updateAppState(WpAppState.LOADING)
 	wpConfig = WPConfig(configPath)
 	wpStatus.log("Configuration loaded.", logging.INFO)
 	wpStatus.logSilent("Required Devices: " + str(wpConfig.getRequiredDevices()), logging.INFO)

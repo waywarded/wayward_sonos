@@ -5,6 +5,7 @@ import requests
 from io import BytesIO
 from play_state_display import PlayStateDisplay
 from wp_marquee_text import WPMarqueeText
+from wp_app_state import WpAppState
 
 class WPDisplay:
     def __init__(self, config, appStatus, fullScreen=False):
@@ -53,10 +54,6 @@ class WPDisplay:
         self.speakerTextItem = WPMarqueeText(config, self, self.speakerFont, (self.screenSize//2, 650), self.screenSize//2, False, False)
 
         self.playStateDisplay = PlayStateDisplay(self)
-
-        # self.testMarquee = WPMarqueeText(config, self, self.trackFont, (360,360), 300, True)
-        # self.testMarquee.setText("Short")
-        # self.testMarquee.setText("This is a really long title with (parantheticals)[and brackets]")
 
         self.wpStatus.log("Pygame initialized", logging.INFO)
 
@@ -145,8 +142,8 @@ class WPDisplay:
         self.trackTextItem.setText(self.lineInTrackName)
         self.trackTextItem.update(deltaTime)
         self.trackTextItem.render(self.screen)        
-
         self.speakerTextItem.setText(trackInfo.device_string)
+
         self.speakerTextItem.setAlpha(180)
         self.speakerTextItem.setScrollMode('truncate')
         self.speakerTextItem.update(deltaTime)
@@ -171,6 +168,17 @@ class WPDisplay:
             self.playStateDisplay.render(self.screen, displayStatePosX, displayStatePosY)
             return
 
+
+    def renderNoConnectionInfo(self, statusString, deltaTime):
+        self.trackTextItem.setText("Not Connected")
+        self.trackTextItem.update(deltaTime)
+        self.trackTextItem.render(self.screen)        
+
+        self.speakerTextItem.setText(statusString)
+        self.speakerTextItem.setAlpha(255)
+        self.speakerTextItem.setScrollMode('scrolling')
+        self.speakerTextItem.update(deltaTime)
+        self.speakerTextItem.render(self.screen)
 
     def _draw_centered_text(self, text, color=(255,255,255), shadow=True, yPos = -999, font = None):
         if font is None:
@@ -199,11 +207,14 @@ class WPDisplay:
         else:
             self.screen.fill((128, 128, 128)) 
 
-        # Display current status
-        statusText = self.statusFont.render(self.wpStatus.status, True, (255, 255, 255))
-        self.screen.blit(statusText, (20, self.screenSize - self.statusFontSize - 20))
-
-        self.renderTrackInfo(deltaTime)
+        # figure out if we are connected
+        if (self.wpStatus.appState != WpAppState.CONNECTED):
+            # Not connected - display app status so we can get a sense of why.
+            statusText = self.statusFont.render(self.wpStatus.status + f"({str(self.wpStatus.appState)})", True, (255, 255, 255))
+            self.screen.blit(statusText, (20, self.screenSize - self.statusFontSize - 20))
+            self.renderNoConnectionInfo(self.wpStatus.status, deltaTime)
+        else:
+            self.renderTrackInfo(deltaTime)
         
         pygame.display.flip()  # Update the display
 

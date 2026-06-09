@@ -1,6 +1,6 @@
 import soco
 import logging
-from wp_app_status import WPAppStatus
+from wp_app_status import WPAppStatus, WpAppState
 from wp_config import WPConfig
 import threading
 from dataclasses import dataclass
@@ -40,6 +40,7 @@ class WPSoco:
 
 	def discoverDevices(self):
 		self.status.updateStatus("Sonos discovery...")
+		self.status.updateAppState(WpAppState.CONNECTING)
 		self.status.log("Discovering Sonos households and devices on the network...",logging.INFO)
 
 		# Find households on the network
@@ -160,20 +161,31 @@ class WPSoco:
 		if self.mainDevice is None:
 			self.status.log("Cannot fetch initial state because main device is not set.", logging.ERROR)
 			self.status.updateStatus("Main device not found...")
+			self.status.updateAppState(WpAppState.NO_CONNECTION)
 			return
 
 		self.fetchState()
 		self.status.updateStatus(f"Attached to '{self.mainDevice.player_name}'")
 
-	def socoThread(self):
+	def tryConnect(self):
 		self.discoverDevices()
 		self.configureGroups()
 		self.fetchInitialState()
+
+
+	def socoThread(self):
+		self.tryConnect()
 
 		if self.mainDevice is not None:
 			self.status.log(f"Subscribing to Sonos events for main device '{self.mainDevice.player_name}'...", logging.INFO)
 			coordinator = self.mainDevice.group.coordinator
 			sub = coordinator.avTransport.subscribe()
+			self.status.updateAppState(WpAppState.CONNECTED)
+		else:
+			self.status.updateAppState(WpAppState.NO_CONNECTION)
+
+		reconnectTimeOut = self.config.getSubkey("connection","reconnect_time", 10)
+		reconnectTimer = 0
 
 		while True:
 			try:
@@ -185,6 +197,14 @@ class WPSoco:
 				# Timeout or other exception, just continue to wait for events
 				pass
 			time.sleep(1)
+
+			if self.status.appState != (WpAppState.CONNECTED):
+				reconnectTimer += 1
+				if reconnectTimer > reconnectTimeOut:
+					reconnectTimer = 0
+					self.status.updateAppState(WpAppState.CONNECTING)
+					self.tryConnect()
+
 
 	def start(self):
 		self.status.updateStatus("Starting Sonos discovery thread...")

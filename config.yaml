@@ -11,6 +11,9 @@ target_devices:
   - name: "Family Room (TV)"
     required: false
 
+connection:
+  reconnect_time: 15
+
 display:
   screen_size: 720
   defult_font_size: 24

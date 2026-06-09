@@ -5,6 +5,7 @@ from wp_config import WPConfig
 import threading
 from dataclasses import dataclass
 import time
+import queue
 
 @dataclass
 class NowPlayingInfo:
@@ -156,8 +157,10 @@ class WPSoco:
             self.status.logSilent(f"------")
             self.status.log(f"Current state - Volume: {currentVolume}, Track: {currentTrack.get('title', 'Unknown')}", logging.INFO)
             self.status.setTrackInfo(NowPlayingInfo.fromTrackInfo(currentTrack,lineIn,transportState, deviceString=deviceStr))
+            return True
         except Exception as e:
             self.status.log(f"Error fetching state: {e}", logging.ERROR)
+            return False
 
     def fetchInitialState(self):
         if self.mainDevice is None:
@@ -184,29 +187,53 @@ class WPSoco:
         else:
             self.status.updateAppState(WpAppState.NO_CONNECTION)
 
+    def checkConnection(self):
+        self.status.logSilent(f"Checking connection...")
+
+        if self.mainDevice is None or self.coordinator is None:
+            self.status.logSilent(f"No device - NO CONNECTION...")
+            return False
+
+        try:
+            self.mainDevice.get_speaker_info(refresh=True,timeout=2.0)
+        except Exception as e:
+            self.status.logSilent(f"Connection check exception: {str(e)}")
+            return False
+
+        self.status.log("OK.")
+        return True
 
     def socoThread(self):
         self.tryConnect()
 
         reconnectTimeOut = self.config.getSubkey("connection","reconnect_time", 10)
         reconnectTimer = 0
+        doCheckConnection = False
 
         while True:
+            doCheckConnection = True
             try:
                 event = self.sub.events.get(timeout=1)
                 if event:
                     self.status.log(f"Received Sonos event: {event}", logging.INFO)
-                    self.fetchState()
-            except Exception as e:
+                    if self.fetchState():
+                        doCheckConnection = False
+            except queue.Empty:
                 # Timeout or other exception, just continue to wait for events
                 pass
+            except Exception as e:
+                self.status.log(f"Exception (non-timeout) in event loop.  Checking connection")
+
             time.sleep(1)
 
-            if self.coordinator == None or self.sub == None:
-                self.status.updateAppState(WpAppState.NO_CONNECTION)
-            
+            # If we think we have a connection, let's ping and make sure it's still there
+            if self.status.appState == WpAppState.CONNECTED and doCheckConnection:
+                connected = self.checkConnection()
+                if not connected:
+                    self.status.updateAppState(WpAppState.NO_CONNECTION)
 
-            if self.status.appState != (WpAppState.CONNECTED):
+            # If we lost our connection, start or update restart timer
+            if self.status.appState != WpAppState.CONNECTED:
                 reconnectTimer += 1
                 self.status.updateStatus(f"Retry in {str(reconnectTimeOut - reconnectTimer)}")
                 if reconnectTimer > reconnectTimeOut:

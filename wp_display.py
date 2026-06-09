@@ -6,6 +6,12 @@ from io import BytesIO
 from play_state_display import PlayStateDisplay
 from wp_marquee_text import WPMarqueeText
 from wp_app_state import WpAppState
+from enum import Enum
+
+class WpDisplayState(Enum):
+    INFO="Info"
+    QUIT_CONFIRM="QuitConfirm"
+    QUITTING="Quitting"
 
 class WPDisplay:
     def __init__(self, config, appStatus, fullScreen=False):
@@ -17,6 +23,7 @@ class WPDisplay:
         self.bgImagePath = config.get("display", {}).get("background_image", "assets/background.png")
         self.statusFontSize = config.get("display", {}).get("status_font_size", 14)
         self.speakerNameFontSize = config.getSubkey("display","speakerNameFontSize",16)
+        self.displayState = WpDisplayState.INFO
 
         displayFlags = 0
         if (fullScreen):
@@ -204,7 +211,7 @@ class WPDisplay:
         self.screen.blit(surf, rect)
 
 
-    def render(self, deltaTime):
+    def renderInfo(self, deltaTime):
         if self.bgImage:
             self.screen.blit(self.bgImage, (0, 0))  # Draw background image
         else:
@@ -219,7 +226,49 @@ class WPDisplay:
         else:
             self.renderTrackInfo(deltaTime)
         
+    def renderQuitConfirm(self, deltaTime):
+        self.screen.fill((25, 25, 25))
+
+        # top band - dark grey, 150px high
+        # pygame.draw.rect(self.screen, (40, 40, 40), pygame.Rect(0, 0, self.screenSize, 75))
+
+        # light grey - 150px to halfway
+        pygame.draw.rect(self.screen, (140, 30, 20), pygame.Rect(0, 80, self.screenSize, self.screenSize // 2 - 80))
+
+        # mid grey - halfway to bottom
+        pygame.draw.rect(self.screen, (45, 45, 45), pygame.Rect(0, self.screenSize // 2, self.screenSize, self.screenSize // 2))
+
+        self._draw_centered_text("Really Quit?", (200,0,0), shadow=True, yPos = 45, font=self.trackFont)
+        self._draw_centered_text("Yes", (255,255,255), shadow=True, yPos = 200, font=self.trackFont)
+        self._draw_centered_text("No", (255,255,255), shadow=True, yPos = 500, font=self.trackFont)
+
+
+    def render(self, deltaTime):
+
+        if self.displayState == WpDisplayState.INFO:
+            self.renderInfo(deltaTime)
+        elif self.displayState == WpDisplayState.QUIT_CONFIRM:
+            self.renderQuitConfirm(deltaTime)
+
         pygame.display.flip()  # Update the display
+
+
+ 
+    def handleTap(self, position):
+        self.wpStatus.logSilent(f"Tap: {str(position)}")
+        if self.displayState == WpDisplayState.QUIT_CONFIRM:
+            self.handleTapConfirm(position)
+        elif self.displayState == WpDisplayState.INFO:
+            self.handleTapInfo(position)
+            
+    def handleTapInfo(self, position):
+        self.displayState = WpDisplayState.QUIT_CONFIRM
+
+    def handleTapConfirm(self, position):
+        if position[1] > self.screenSize//2:
+            self.displayState = WpDisplayState.INFO
+        else:
+            self.displayState = WpDisplayState.QUITTING
 
     def run(self):
         self.wpStatus.updateStatus("Starting display loop...")
@@ -240,6 +289,14 @@ class WPDisplay:
                         pygame.quit()
                         sys.exit()
 
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    self.handleTap(event.pos)
+                
+            
+            if self.displayState == WpDisplayState.QUITTING:
+                pygame.quit()
+                sys.exit()
+                
             self.render(dt)
             
         self.wpStatus.updateStatus("Shutting down display...")

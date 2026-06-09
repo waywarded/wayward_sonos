@@ -37,6 +37,8 @@ class WPSoco:
         self.status = appStatus
         self.mainDevice = None
         self.mainHouseholdDevices = []
+        self.coordinator = None
+        self.sub = None
 
     def discoverDevices(self):
         self.status.updateStatus("Sonos discovery...")
@@ -176,8 +178,8 @@ class WPSoco:
 
         if self.mainDevice is not None:
             self.status.log(f"Subscribing to Sonos events for main device '{self.mainDevice.player_name}'...", logging.INFO)
-            coordinator = self.mainDevice.group.coordinator
-            sub = coordinator.avTransport.subscribe()
+            self.coordinator = self.mainDevice.group.coordinator
+            self.sub = self.coordinator.avTransport.subscribe()
             self.status.updateAppState(WpAppState.CONNECTED)
         else:
             self.status.updateAppState(WpAppState.NO_CONNECTION)
@@ -191,7 +193,7 @@ class WPSoco:
 
         while True:
             try:
-                event = sub.events.get(timeout=1)
+                event = self.sub.events.get(timeout=1)
                 if event:
                     self.status.log(f"Received Sonos event: {event}", logging.INFO)
                     self.fetchState()
@@ -199,6 +201,10 @@ class WPSoco:
                 # Timeout or other exception, just continue to wait for events
                 pass
             time.sleep(1)
+
+            if self.coordinator == None or self.sub == None:
+                self.status.updateAppState(WpAppState.NO_CONNECTION)
+            
 
             if self.status.appState != (WpAppState.CONNECTED):
                 reconnectTimer += 1

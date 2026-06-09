@@ -52,7 +52,7 @@ class WPDisplay:
         self.artistTextItem = WPMarqueeText(config, self, self.artistFont, (self.screenSize//2, 152), self.screenSize//1.5, False, True)
         self.albumTextItem = WPMarqueeText(config, self, self.albumFont, (self.screenSize//2, 570), self.screenSize//1.5, True, True)
         self.speakerTextItem = WPMarqueeText(config, self, self.speakerFont, (self.screenSize//2, 650), self.screenSize//2, False, False)
-
+        self.statusTextItem = WPMarqueeText(config, self, self.speakerFont, (self.screenSize//2, 690), self.screenSize//2, False, False)
         self.playStateDisplay = PlayStateDisplay(self)
 
         self.wpStatus.log("Pygame initialized", logging.INFO)
@@ -117,6 +117,8 @@ class WPDisplay:
         self.trackTextItem.setText(trackInfo.title)
         self.artistTextItem.setText(trackInfo.artist)
         self.albumTextItem.setText(trackInfo.album)
+        self.albumTextItem.setScrollMode('scrolling')
+        
         self.speakerTextItem.setText(trackInfo.device_string)
         self.speakerTextItem.setAlpha(180)
         self.speakerTextItem.setScrollMode('truncate')
@@ -179,6 +181,7 @@ class WPDisplay:
         self.speakerTextItem.setScrollMode('scrolling')
         self.speakerTextItem.update(deltaTime)
         self.speakerTextItem.render(self.screen)
+
 
     def _draw_centered_text(self, text, color=(255,255,255), shadow=True, yPos = -999, font = None):
         if font is None:

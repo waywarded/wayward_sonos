@@ -2,9 +2,14 @@ import yaml
 import logging
 
 class WPConfig:
-	def __init__(self, config_file):
+	def __init__(self, config_file, display_config_file):
 		with open(config_file, 'r') as f:
 			self.config = yaml.safe_load(f)
+		
+		with open(display_config_file, 'r') as f:
+			displayconfig = yaml.safe_load(f)
+		
+		self.config.update(displayconfig)
 
 	def getRequiredDevices(self):
 		devices = self.config.get("target_devices", [])

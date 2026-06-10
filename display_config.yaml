@@ -1,0 +1,65 @@
+display:
+  screen_size: 720
+  fallback_font_size: 24
+  background_image: "assets/background01.png"
+  text_color: [255, 255, 255]
+  text_shadow_color: [0, 0, 0]
+  text_shadow_offset: [2, 2]
+  line_in_track_image: "assets/lineIn02.png"
+  line_in_track_name: "Record Player"
+
+
+layout:
+  track_font_size: 42
+  track_text_color: [255,255,255]
+  track_text_alpha: 255
+  track_font_asset: "assets/PublicSans-Bold.ttf"
+  track_text_y: 120
+  track_text_width: 480
+  track_text_shadow: true
+  track_strip_parens: true
+  track_line_space: -5
+
+  artist_font_size: 28
+  artist_font_asset: 'assets/PublicSans-Medium.ttf'
+  artist_text_y: 575
+  artist_text_width: 480
+  artist_text_color: [255,255,255]
+  artist_text_alpha: 255
+  artist_text_shadow: true
+  artist_strip_parens: true
+
+  album_font_size: 28
+  album_font_asset: 'assets/PublicSans-MediumItalic.ttf'
+  album_text_y: 610
+  album_text_width: 480
+  album_text_color: [255,255,255]
+  album_text_alpha: 255
+  album_text_shadow: true
+  album_strip_parens: true
+
+  speaker_font_size: 14
+  speaker_font_asset: 'assets/PublicSans-Medium.ttf'
+  speaker_text_y: 50
+  speaker_text_width: 300
+  speaker_text_color: [255,255,255]
+  speaker_text_alpha: 120
+  speaker_text_shadow: true
+  speaker_strip_parens: false
+
+  status_font_size: 12
+  status_font_asset: 'assets/PublicSans-Medium.ttf'
+  status_text_y: 690
+  status_text_width: 360
+  status_text_color: [255,255,255]
+  status_text_alpha: 180
+  status_text_shadow: true
+  status_strip_parens: false
+
+  album_art_size: 360
+  album_art_y: 360
+
+  ui_header_font_size: 24
+  ui_header_font_asset: 'assets/PublicSans-Bold.ttf'
+
+  play_state_y: 660

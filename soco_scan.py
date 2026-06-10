@@ -10,7 +10,7 @@ def main():
 
 	# Load config
 	wpStatus.updateStatus("Initializing...")
-	wpConfig = WPConfig("config.yaml")
+	wpConfig = WPConfig("config.yaml", "display_config.yaml")
 	wpStatus.log("Configuration loaded.", logging.INFO)
 	wpStatus.logSilent("Required Devices: " + str(wpConfig.getRequiredDevices()), logging.INFO)
 

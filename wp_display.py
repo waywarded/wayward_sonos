@@ -5,6 +5,7 @@ import requests
 from io import BytesIO
 from play_state_display import PlayStateDisplay
 from wp_marquee_text import WPMarqueeText
+from wp_autosplit_text import WpAutoSplitText
 from wp_app_state import WpAppState
 from enum import Enum
 
@@ -17,12 +18,8 @@ class WPDisplay:
     def __init__(self, config, appStatus, fullScreen=False):
         self.wpStatus = appStatus
         self.config = config
-        self.screenSize = config.get("display", {}).get("screen_size", 720)
-        self.defaultFontSize = config.get("display", {}).get("font_size", 24)
-        self.largeFontSize = config.get("display", {}).get("large_font_size", 32)
-        self.bgImagePath = config.get("display", {}).get("background_image", "assets/background.png")
-        self.statusFontSize = config.get("display", {}).get("status_font_size", 14)
-        self.speakerNameFontSize = config.getSubkey("display","speakerNameFontSize",16)
+        self.screenSize = config.getSubkey('display', 'screen_size', 720)
+        self.bgImagePath = config.getSubkey('display', 'background_image', 'assets/background.png')
         self.displayState = WpDisplayState.INFO
 
         displayFlags = 0
@@ -34,16 +31,13 @@ class WPDisplay:
         pygame.init()
         self.screen = pygame.display.set_mode((self.screenSize, self.screenSize),flags=displayFlags)
         pygame.display.set_caption("Wayward Sonos")
-        self.font = pygame.font.SysFont("Arial", self.defaultFontSize)
-        self.trackFont = pygame.font.Font('assets/PublicSans-Bold.ttf', self.largeFontSize)
-        self.artistFont = pygame.font.Font('assets/PublicSans-Medium.ttf', self.defaultFontSize)
-        self.albumFont = pygame.font.Font('assets/PublicSans-MediumItalic.ttf', self.defaultFontSize)
-        self.speakerFont = pygame.font.Font('assets/PublicSans-Medium.ttf', self.speakerNameFontSize)
+
+        defaultFontSize = config.getSubkey('display', 'fallback_font_size', 24)
+        self.fallbackFont = pygame.font.SysFont("Arial", defaultFontSize)
         
-        self.statusFont = pygame.font.SysFont("Arial", self.statusFontSize)
-        
-        self.lineInImagePath = config.get("display",{}).get("line_in_track_image", "assets/default.png")
-        self.lineInTrackName = config.getSubkey("display","line_in_track_name","Line-In")
+        self.lineInImagePath = config.getSubkey('display', 'line_in_track_image', 'assets/lineIn01.png')
+        self.lineInTrackName = config.getSubkey('display','line_in_track_name','Line-In')
+
         self.lineInImage = None
         self.bgImage = None
         self.running = False
@@ -55,14 +49,67 @@ class WPDisplay:
         self.textShadowColor = config.getSubkey("display", "text_shadow_color", (0, 0, 0))
         self.textShadowOffset = config.getSubkey("display", "text_shadow_offset", (2, 2))
 
-        self.trackTextItem = WPMarqueeText(config, self, self.trackFont, (self.screenSize//2, 114), self.screenSize//1.5, False, True)
-        self.artistTextItem = WPMarqueeText(config, self, self.artistFont, (self.screenSize//2, 152), self.screenSize//1.5, False, True)
-        self.albumTextItem = WPMarqueeText(config, self, self.albumFont, (self.screenSize//2, 570), self.screenSize//1.5, True, True)
-        self.speakerTextItem = WPMarqueeText(config, self, self.speakerFont, (self.screenSize//2, 650), self.screenSize//2, False, False)
-        self.statusTextItem = WPMarqueeText(config, self, self.speakerFont, (self.screenSize//2, 690), self.screenSize//2, False, False)
-        self.playStateDisplay = PlayStateDisplay(self)
+        self.artSize = config.getSubkey('layout', 'album_art_size',360)
+        self.artPosY = config.getSubkey('layout', 'album_art_y', 360)
 
+        self.trackFont = self.getFontForElement('track')
+        # self.trackTextItem = self.createMarqueeForElement('track', self.trackFont)
+        self.trackTextItem = self.createWrappingTextElement('track', self.trackFont)
+        self.artistFont = self.getFontForElement('artist')
+        self.artistTextItem = self.createMarqueeForElement('artist', self.artistFont)
+
+        self.albumFont = self.getFontForElement('album')
+        self.albumTextItem = self.createMarqueeForElement('album', self.albumFont)
+
+        self.speakerFont = self.getFontForElement('speaker')
+        self.speakerTextItem = self.createMarqueeForElement('speaker', self.speakerFont)
+
+        self.statusFont = self.getFontForElement('status')
+        self.statusTextItem = self.createMarqueeForElement('status', self.statusFont)
+
+        self.uiHeaderFont = self.getFontForElement('ui_header')
+
+        self.playStateY = config.getSubkey('layout', 'play_state_y')
+
+        self.playStateDisplay = PlayStateDisplay(self)
         self.wpStatus.log("Pygame initialized", logging.INFO)
+
+        
+
+    def getFontForElement(self, itemName):
+        fontName = self.config.getSubkey('layout', f'{itemName}_font_asset', 'assets/PublicSans-Medium.ttf')
+        fontSize = self.config.getSubkey('layout', f'{itemName}_font_size', 24)
+        font = pygame.font.Font(fontName, fontSize)
+        return font
+
+    def createWrappingTextElement(self, itemName, font):
+        centerX = self.screenSize//2
+        centerY = self.config.getSubkey('layout', f'{itemName}_text_y', self.screenSize//2)
+        doShadow = self.config.getSubkey('layout', f'{itemName}_text_shadow', False)
+        doStrip = self.config.getSubkey('layout', f'{itemName}_strip_parens', True)
+        textWidth = self.config.getSubkey('layout', f'{itemName}_text_width', self.screenSize//2)
+        lineSpace = self.config.getSubkey('layout', f'{itemName}_line_space', 5)
+        itemAlpha = self.config.getSubkey('layout', f'{itemName}_text_alpha', 255)
+
+        item = WpAutoSplitText(self.config, self, font, (centerX, centerY), textWidth, doShadow, doStrip, lineSpace = lineSpace)
+        # item = WPMarqueeText(self.config, self, font, (centerX, centerY), textWidth, doShadow, doStrip)
+        # item.setAlpha(itemAlpha)
+        return item        
+
+    
+    def createMarqueeForElement(self, itemName, font):
+        centerX = self.screenSize//2
+        centerY = self.config.getSubkey('layout', f'{itemName}_text_y', self.screenSize//2)
+        doShadow = self.config.getSubkey('layout', f'{itemName}_text_shadow', False)
+        doStrip = self.config.getSubkey('layout', f'{itemName}_strip_parens', True)
+        textWidth = self.config.getSubkey('layout', f'{itemName}_text_width', self.screenSize//2)
+
+        itemAlpha = self.config.getSubkey('layout', f'{itemName}_text_alpha', 255)
+
+        item = WPMarqueeText(self.config, self, font, (centerX, centerY), textWidth, doShadow, doStrip)
+        item.setAlpha(itemAlpha)
+        return item        
+
 
     def loadBackgroundImage(self):
         self.wpStatus.updateStatus("Loading background image...")
@@ -100,13 +147,14 @@ class WPDisplay:
             return
 
         self.wpStatus.updateStatus("Loading album art...")
-                
+        artSize = self.config.getSubkey('layout', 'album_art_size', self.screenSize//2 )
+
         try:
             response = requests.get(artUrl)
             response.raise_for_status()  # Check if the request was successful
             imageFile = BytesIO(response.content)
             albumArtImage = pygame.image.load(imageFile)
-            self.trackArtSurface = pygame.transform.scale(albumArtImage, (self.screenSize/2, self.screenSize/2))
+            self.trackArtSurface = pygame.transform.scale(albumArtImage, (artSize, artSize))
             self.wpStatus.logSilent(f"Loaded album art from {artUrl}", logging.INFO)
             self.trackArtUrl = artUrl
         except Exception as e:
@@ -119,7 +167,9 @@ class WPDisplay:
             self.fetchAlbumArt(trackInfo.album_art_url)
         
         if self.trackArtSurface:
-            self.screen.blit(self.trackArtSurface, (self.screenSize/4, self.screenSize/4))  # Draw album art
+            posX = (self.screenSize//2 - self.artSize//2)
+            posY = (self.artPosY - self.artSize//2)
+            self.screen.blit(self.trackArtSurface, (posX, posY))  # Draw album art
 
         self.trackTextItem.setText(trackInfo.title)
         self.artistTextItem.setText(trackInfo.artist)
@@ -127,7 +177,6 @@ class WPDisplay:
         self.albumTextItem.setScrollMode('scrolling')
         
         self.speakerTextItem.setText(trackInfo.device_string)
-        self.speakerTextItem.setAlpha(180)
         self.speakerTextItem.setScrollMode('truncate')
 
         self.trackTextItem.update(deltaTime)
@@ -153,7 +202,6 @@ class WPDisplay:
         self.trackTextItem.render(self.screen)        
         self.speakerTextItem.setText(trackInfo.device_string)
 
-        self.speakerTextItem.setAlpha(180)
         self.speakerTextItem.setScrollMode('truncate')
         self.speakerTextItem.update(deltaTime)
         self.speakerTextItem.render(self.screen)
@@ -162,7 +210,7 @@ class WPDisplay:
         trackInfo = self.wpStatus.latestTrackInfo
 
         displayStatePosX = self.screenSize//2
-        displayStatePosY = 615
+        displayStatePosY = self.playStateY
 
         if trackInfo:
             if trackInfo.line_in:
@@ -184,7 +232,6 @@ class WPDisplay:
         self.trackTextItem.render(self.screen)        
 
         self.speakerTextItem.setText(statusString)
-        self.speakerTextItem.setAlpha(255)
         self.speakerTextItem.setScrollMode('scrolling')
         self.speakerTextItem.update(deltaTime)
         self.speakerTextItem.render(self.screen)
@@ -192,7 +239,7 @@ class WPDisplay:
 
     def _draw_centered_text(self, text, color=(255,255,255), shadow=True, yPos = -999, font = None):
         if font is None:
-            renderFont = self.font
+            renderFont = self.fallbackFont
         else:
             renderFont = font
 
@@ -221,7 +268,8 @@ class WPDisplay:
         if (self.wpStatus.appState != WpAppState.CONNECTED):
             # Not connected - display app status so we can get a sense of why.
             statusText = self.statusFont.render(self.wpStatus.status + f"({str(self.wpStatus.appState)})", True, (255, 255, 255))
-            self.screen.blit(statusText, (20, self.screenSize - self.statusFontSize - 20))
+            statusHeight = self.config.getSubkey('layout', 'status_font_size', 10)
+            self.screen.blit(statusText, (20, self.screenSize - statusHeight - 20))
             self.renderNoConnectionInfo(self.wpStatus.status, deltaTime)
         else:
             self.renderTrackInfo(deltaTime)
@@ -229,19 +277,12 @@ class WPDisplay:
     def renderQuitConfirm(self, deltaTime):
         self.screen.fill((25, 25, 25))
 
-        # top band - dark grey, 150px high
-        # pygame.draw.rect(self.screen, (40, 40, 40), pygame.Rect(0, 0, self.screenSize, 75))
-
-        # light grey - 150px to halfway
         pygame.draw.rect(self.screen, (140, 30, 20), pygame.Rect(0, 80, self.screenSize, self.screenSize // 2 - 80))
-
-        # mid grey - halfway to bottom
         pygame.draw.rect(self.screen, (45, 45, 45), pygame.Rect(0, self.screenSize // 2, self.screenSize, self.screenSize // 2))
 
-        self._draw_centered_text("Really Quit?", (200,0,0), shadow=True, yPos = 45, font=self.trackFont)
-        self._draw_centered_text("Yes", (255,255,255), shadow=True, yPos = 200, font=self.trackFont)
-        self._draw_centered_text("No", (255,255,255), shadow=True, yPos = 500, font=self.trackFont)
-
+        self._draw_centered_text("Really Quit?", (200,0,0), shadow=True, yPos = 45, font=self.uiHeaderFont)
+        self._draw_centered_text("Yes", (255,255,255), shadow=True, yPos = 200, font=self.uiHeaderFont)
+        self._draw_centered_text("No", (255,255,255), shadow=True, yPos = 500, font=self.uiHeaderFont)
 
     def render(self, deltaTime):
 
@@ -273,8 +314,8 @@ class WPDisplay:
     def run(self):
         self.wpStatus.updateStatus("Starting display loop...")
         self.loadBackgroundImage()
-        self.running = True
 
+        self.running = True
         clock = pygame.time.Clock()
 
         while self.running:
@@ -284,20 +325,19 @@ class WPDisplay:
                 if event.type == pygame.QUIT:
                     self.running = False
 
-                if event.type == pygame.KEYDOWN:
+                elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
-                        pygame.quit()
-                        sys.exit()
+                        self.running = False
 
-                if event.type == pygame.MOUSEBUTTONDOWN:
+                elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.handleTap(event.pos)
                 
             
             if self.displayState == WpDisplayState.QUITTING:
-                pygame.quit()
-                sys.exit()
-                
-            self.render(dt)
+                self.running = False
+
+            if self.running:
+                self.render(dt)
             
         self.wpStatus.updateStatus("Shutting down display...")
         pygame.quit()

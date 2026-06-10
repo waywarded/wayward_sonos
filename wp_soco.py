@@ -103,9 +103,9 @@ class WPSoco:
             return
 
         self.status.updateStatus(f"Configuring Groups ('{mainDeviceName}')...")
-        self.status.log(f"Unjoining main device '{mainDeviceName}' from any existing groups...", logging.INFO)
 
         return
+        self.status.log(f"Unjoining main device '{mainDeviceName}' from any existing groups...", logging.INFO)
 
         mainDevice.unjoin()  # Ensure the main device is not grouped with others
 
@@ -188,7 +188,7 @@ class WPSoco:
             self.status.updateAppState(WpAppState.NO_CONNECTION)
 
     def checkConnection(self):
-        self.status.logSilent(f"Checking connection...")
+        # self.status.logSilent(f"Checking connection...")
 
         if self.mainDevice is None or self.coordinator is None:
             self.status.logSilent(f"No device - NO CONNECTION...")
@@ -200,7 +200,7 @@ class WPSoco:
             self.status.logSilent(f"Connection check exception: {str(e)}")
             return False
 
-        self.status.log("OK.")
+        # self.status.log("OK.")
         return True
 
     def socoThread(self):
@@ -220,9 +220,11 @@ class WPSoco:
                         doCheckConnection = False
             except queue.Empty:
                 # Timeout or other exception, just continue to wait for events
+                doCheckConnection = False
                 pass
             except Exception as e:
                 self.status.log(f"Exception (non-timeout) in event loop.  Checking connection")
+                doCheckConnection = True
 
             time.sleep(1)
 
@@ -234,7 +236,7 @@ class WPSoco:
 
             # If we lost our connection, start or update restart timer
             if self.status.appState != WpAppState.CONNECTED:
-                reconnectTimer += 1
+                reconnectTimer += 2
                 self.status.updateStatus(f"Retry in {str(reconnectTimeOut - reconnectTimer)}")
                 if reconnectTimer > reconnectTimeOut:
                     reconnectTimer = 0

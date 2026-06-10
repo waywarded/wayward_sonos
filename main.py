@@ -16,15 +16,16 @@ def main():
 	# parse args
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--config', default='config.yaml', help='path to config file')
+	parser.add_argument('--display_config', default='display_config.yaml', help="path to display configuration")
 	parser.add_argument('-f','--fullscreen',action='store_true')
 
 	args = parser.parse_args()
 	configPath = args.config
-	
+	displayConfigPath = args.display_config
 	# Load config
-	wpStatus.updateStatus(f"Initializing from {configPath}")
+	wpStatus.updateStatus(f"Initializing from {configPath} and {displayConfigPath}")
 	wpStatus.updateAppState(WpAppState.LOADING)
-	wpConfig = WPConfig(configPath)
+	wpConfig = WPConfig(configPath, displayConfigPath)
 	wpStatus.log("Configuration loaded.", logging.INFO)
 	wpStatus.logSilent("Required Devices: " + str(wpConfig.getRequiredDevices()), logging.INFO)
 

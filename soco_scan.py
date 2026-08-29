@@ -17,7 +17,7 @@ def main():
 	# initialize soco thread.
 	wpSoco = WPSoco(wpConfig, wpStatus)
 	wpSoco.discoverDevices()
-	wpSoco.listHouseholdDevices()
+	# wpSoco.listHouseholdDevices()
 
 
 if __name__ == "__main__":

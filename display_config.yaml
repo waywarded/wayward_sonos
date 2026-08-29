@@ -63,3 +63,11 @@ layout:
   ui_header_font_asset: 'assets/PublicSans-Bold.ttf'
 
   play_state_y: 660
+
+deck:
+  play_button_asset: 'assets/PlayBtn.png'
+  pause_button_asset: 'assets/PauseBtn.png'
+  next_button_asset: 'assets/NextTrackBtn.png'
+  prev_button_asset: 'assets/PrevTrackBtn.png'
+  vol_up_button_asset: 'assets/VolUpBtn.png'
+  vol_down_button_asset: 'assets/VolDownBtn.png'

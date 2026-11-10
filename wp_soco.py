@@ -7,6 +7,8 @@ from dataclasses import dataclass
 import time
 import queue
 
+from soco.core import DidlPlaylistContainer
+
 @dataclass
 class NowPlayingInfo:
     title: str = "Unknown Title"
@@ -43,6 +45,7 @@ class WPSoco:
         self.coordinator = None
         self.sub = None
         self.status.subscribeToButtonEvent('transport', self.handleTransportEvent)
+        self.status.subscribeToButtonEvent('content', self.handleContentEvent)
 
     def discoverDevices(self):
         self.status.updateStatus("Sonos discovery...")
@@ -139,7 +142,7 @@ class WPSoco:
         if coordinator and coordinator.is_playing_line_in:
             lineIn = True
 
-        transportInfo = self.mainDevice.get_current_transport_info()
+        transportInfo = coordinator.get_current_transport_info()
         transportState = transportInfo[
             'current_transport_state'] if transportInfo else 'STOPPED'
 
@@ -157,8 +160,8 @@ class WPSoco:
         self.status.logSilent(f"current device group:{deviceStr}")
 
         try:
-            currentVolume = self.mainDevice.volume
-            currentTrack = self.mainDevice.get_current_track_info()
+            currentVolume = self.coordinator().volume
+            currentTrack = self.mainCoordinator().get_current_track_info()
             self.status.logSilent(f"------")
             self.status.log(
                 f"Fetched current state from main device '{self.mainDevice.player_name}': {str(currentTrack)}",
@@ -172,6 +175,13 @@ class WPSoco:
                                              lineIn,
                                              transportState,
                                              deviceString=deviceStr))
+            self.status.clearFavs()
+            sonos_favs = self.mainCoordinator().music_library.get_sonos_favorites()
+            for fav in sonos_favs:
+                print(f"title: {fav.title}")
+                print(f"ref: {fav.reference}")
+                print(f"resources: {fav.resources}")
+                self.status.addFav(fav.title, fav)
             return True
         except Exception as e:
             self.status.log(f"Error fetching state: {e}", logging.ERROR)
@@ -223,13 +233,13 @@ class WPSoco:
     def checkConnection(self):
         # self.status.logSilent(f"Checking connection...")
 
-        if self.mainDevice is None or self.coordinator is None:
+        if self.mainDevice is None or self.coordinator() is None:
             self.status.logSilent(f"No device - NO CONNECTION...")
             self.sub = None
             return False
 
         try:
-            self.mainDevice.get_speaker_info(refresh=True, timeout=2.0)
+            self.coordinator().get_speaker_info(refresh=True, timeout=2.0)
         except Exception as e:
             self.status.logSilent(f"Connection check exception: {str(e)}")
             return False
@@ -302,16 +312,56 @@ class WPSoco:
                 control = kwargs.get('control','')
                 match control:
                     case 'play':
-                        self.mainDevice.play()
+                        self.mainCoordinator().play()
                     case 'pause':
-                        self.mainDevice.pause()
+                        self.mainCoordinator().pause()
                     case 'next':
-                        self.mainDevice.next()
+                        self.mainCoordinator().next()
                     case 'prev':
-                        self.mainDevice.previous()
+                        self.mainCoordinator().previous()
                     case 'vol_up':
-                        self.mainDevice.set_relative_volume(10)
+                        self.mainCoordinator().set_relative_volume(10)
                     case 'vol_down':
-                        self.mainDevice.set_relative_volume(-10)
+                        self.mainCoordinator().set_relative_volume(-10)
+                    case 'play_fav':
+                        print(f'play fav:')
         except Exception as e:
             self.status.log(f"Exception sending command {e}")
+
+
+    def handleContentEvent(self,**kwargs):
+        print (f'content event: {kwargs}')
+
+        try:
+            if self.status.appState == WpAppState.CONNECTED and not (self.sub is None) and not (self.mainDevice is None):
+                control = kwargs.get('control','')
+                params = kwargs.get('params')
+                match control:
+                    case 'play_fav':
+                        print(f'play fav:{params}')
+                        if params and 'fav' in params:
+                            fav = params['fav']
+
+                            print(fav.__dict__)
+                            if fav.reference:
+                                print('fav_ref:')
+                                print(fav.reference.__dict__)
+                                self.mainCoordinator().clear_queue()
+                                self.mainCoordinator().add_to_queue(fav.reference)
+                                self.mainCoordinator().play_from_queue(0)
+
+                            # self.status.log(f'queue: {fav}')
+                            # self.mainDevice.clear_queue()
+
+                            # self.mainDevice.add_to_queue(fav)
+                            # time.sleep(0.5)
+                            # self.status.log(f'play from queue: (0)')
+                            # self.mainDevice.play_from_queue(0)
+        except Exception as e:
+            self.status.log(f"Exception sending command {e}")
+
+
+    def mainCoordinator(self):
+        if self.mainDevice is None:
+            return None
+        return self.mainDevice.group.coordinator

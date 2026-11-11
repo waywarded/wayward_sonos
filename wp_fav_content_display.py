@@ -2,6 +2,7 @@ import pygame
 import math
 from wp_app_status import WPAppStatus
 from wp_display_button import WPDisplayButton
+from wp_button_label import renderButtonLabel
 
 class WpFavContentDisplay:
     def __init__(self, config, wpStatus, parent):
@@ -15,7 +16,8 @@ class WpFavContentDisplay:
         self.tileGap = config.getSubkey('layout', 'favs_tile_gap', 15)
         self.gridCenterY = config.getSubkey('layout', 'favs_grid_center_y', parent.screenSize//2)
         self.tileColor = config.getSubkey('layout', 'favs_tile_color', [50, 70, 50])
-        self.tileFont = parent.getFontForElement('favs_tile')
+        self.tileFontSizes = config.getSubkey('layout', 'favs_tile_font_sizes', [24, 20, 16])
+        self.tileFontAsset = config.getSubkey('layout', 'favs_tile_font_asset', 'assets/PublicSans-Medium.ttf')
 
         self.prevPageButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_prev_page_pos', [50, 320]),
@@ -62,19 +64,18 @@ class WpFavContentDisplay:
             col = i % self.columns
             row = i // self.columns
             pos = [left + col * (self.tileSize + self.tileGap), top + row * (self.tileSize + self.tileGap)]
-            button = WPDisplayButton(pos, [self.tileSize, self.tileSize], self.makeTileSurface(first + i + 1))
+            button = WPDisplayButton(pos, [self.tileSize, self.tileSize], self.makeTileSurface(title))
             self.tiles.append((button, fav))
 
         self.prevPageButton.setVisible(self.page > 0)
         self.nextPageButton.setVisible(self.page < self.pageCount() - 1)
 
-    # plain numbered tile until the label step
-    def makeTileSurface(self, number):
-        surf = pygame.Surface((self.tileSize, self.tileSize))
-        surf.fill(self.tileColor)
-        text = self.tileFont.render(str(number), True, (255, 255, 255))
-        surf.blit(text, text.get_rect(center=(self.tileSize//2, self.tileSize//2)))
-        return surf
+    # same label drawing as the Stream Deck keys, converted from PIL to pygame
+    def makeTileSurface(self, title):
+        size = (self.tileSize, self.tileSize)
+        img = renderButtonLabel(size, title, fontSizes=self.tileFontSizes, bgColor=tuple(self.tileColor),
+                                fontPath=self.tileFontAsset, padding=8)
+        return pygame.image.frombytes(img.tobytes(), size, 'RGB')
 
     def render(self, screen):
         self.checkFavs()

@@ -13,8 +13,9 @@ One step at a time, each tested before the next.
 2b. **Slide-in.** Favorites slides up from the bottom over now playing, and the back button becomes a down button (`assets/DownBtn.png`). Draw the favorites panel to its own surface and blit it at a y offset; a 0→1 slide value moves with `deltaTime`; stay in `FAVORITES` until fully slid out; ignore taps while moving. `_draw_centered_text` gets an optional target surface. Panel may want its own background/tint so it reads as a layer.
    Test: open/close animate both ways; taps ignored mid-slide; grid taps and paging still work once open. Done (panel is solid `favs_panel_color`, default black; `favs_slide_time` 0.3s).
 3. **Labels.** New `wp_button_label.py` draws a labeled tile as a PIL image (moved from `WPStreamDeckUI._setupButtonWithLabel`). The Stream Deck uses it as-is; `WPDisplayButton` can be built from a PIL image.
-   Test: deck labels look the same as before; screen tiles show names; long names split or truncate.
-4. Later: favorite art with a cache, shared by the deck and the screen.
+   Test: deck labels look the same as before; screen tiles show names; long names split or truncate. Done (deck output pixel-identical; screen tile text in `favs_tile_font_sizes` / `favs_tile_font_asset`).
+   Label quirks seen (shared code, so both deck and screen): it shrinks the font before trying two lines, so tiles end up in mixed sizes; a name too long for two lines truncates to one line instead of two lines with "..." on the second; a hyphen split rejoins with a space ("See- Through").
+4. **Favorite art.** Move `WPStreamDeckUI._get_image_from_fav` (Ed's fetch code) somewhere shared and use it from both the deck and the screen: one fetch path, not a second copy. Add the speaker address to relative `/getaa?...` URIs, cache each image after the first download, fetch off the display thread, and turn the deck call back on. Playing a favorite already goes through the same `content`/`play_fav` handler from both.
 5. Later: a more circular favorites layout.
 6. Later: make the volume button work: open a volume control, maybe a drag control.
 

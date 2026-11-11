@@ -1,5 +1,4 @@
 import threading
-import re
 import time
 import logging
 import requests
@@ -8,8 +7,9 @@ from io import BytesIO
 import StreamDeck
 from StreamDeck.DeviceManager import DeviceManager
 from StreamDeck.ImageHelpers import PILHelper
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 from wp_app_status import WPAppStatus, WpAppState
+from wp_button_label import renderButtonLabel
 
 class WPStreamDeckUI:
 
@@ -79,72 +79,7 @@ class WPStreamDeckUI:
 
         target_size = self.deckDevice.key_image_format()['size']
 
-        if image is None:
-            img = Image.new('RGB', target_size, (50,70,50))
-            draw = ImageDraw.Draw(img)
-        else:
-            img = image.resize(target_size)
-            draw = ImageDraw.Draw(img)
-        
-        # try progressively smaller fonts before splitting/truncating
-        font = None
-        fontSizes = [14, 12, 10]
-        for fontSize in fontSizes:
-            try:
-                f = ImageFont.truetype('assets/PublicSans-Medium.ttf', fontSize)
-            except:
-                f = ImageFont.load_default()
-            font = f
-            bbox = draw.textbbox((0, 0), label, font=font)
-            if bbox[2] - bbox[0] <= target_size[0] - 8:
-                break  # fits at this size
-        
-        w, h = target_size
-        maxWidth = w - 8
-        
-        # try to fit on one line first
-        bbox = draw.textbbox((0, 0), label, font=font)
-        if bbox[2] - bbox[0] > maxWidth:
-            # try balanced two-line split
-            words = re.split(r'\s+|(?<=\-)', label)
-            bestSplit = None
-            bestDiff = float('inf')
-            
-            for i in range(1, len(words)):
-                line1 = ' '.join(words[:i])
-                line2 = ' '.join(words[i:])
-                w1 = draw.textbbox((0, 0), line1, font=font)[2]
-                w2 = draw.textbbox((0, 0), line2, font=font)[2]
-                if w1 > maxWidth or w2 > maxWidth:
-                    continue
-                diff = abs(w1 - w2)
-                if diff < bestDiff:
-                    bestDiff = diff
-                    bestSplit = i
-            
-            if bestSplit:
-                lines = [' '.join(words[:bestSplit]), ' '.join(words[bestSplit:])]
-            else:
-                # truncate single line
-                text = label
-                while text and draw.textbbox((0, 0), text + '...', font=font)[2] > maxWidth:
-                    text = text[:-1]
-                lines = [text + '...']
-        else:
-            lines = [label]
-        
-        # measure and draw centered
-        lineHeight = draw.textbbox((0, 0), 'Ag', font=font)[3]
-        gap = 4
-        totalH = len(lines) * lineHeight + (len(lines) - 1) * gap
-        startY = (h - totalH) // 2
-        
-        for i, line in enumerate(lines):
-            bbox = draw.textbbox((0, 0), line, font=font)
-            x = (w - (bbox[2] - bbox[0])) // 2
-            y = startY + i * (lineHeight + gap) - bbox[1]
-            draw.text((x + 1, y + 1), line, font=font, fill=(0, 0, 0))
-            draw.text((x, y), line, font=font, fill=(255, 255, 255))
+        img = renderButtonLabel(target_size, label, image)
         
         nativeImg = PILHelper.to_native_format(self.deckDevice, img)
         self.deckDevice.set_key_image(buttonId, nativeImg)

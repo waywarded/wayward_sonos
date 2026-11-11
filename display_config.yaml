@@ -85,10 +85,11 @@ layout:
   volume_button_size: [30, 30]
   volume_button_asset: "assets/VolBtn.png"
 
-  # favorites screen; placeholder art
+  # favorites screen
+  favs_slide_time: 0.3
   favs_back_button_pos: [340, 640]
   favs_back_button_size: [40,40]
-  favs_back_button_asset: "assets/PrevTrackBtn.png"
+  favs_back_button_asset: "assets/DownBtn.png"
 
 
 deck:

@@ -3,7 +3,7 @@ import sys
 import logging
 import requests
 from io import BytesIO
-from play_state_display import PlayStateDisplay
+from play_state_display import PlayStateDisplay, moveToward
 from wp_marquee_text import WPMarqueeText
 from wp_autosplit_text import WpAutoSplitText
 from wp_app_state import WpAppState
@@ -122,10 +122,17 @@ class WPDisplay:
         self.favsBackButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_back_button_pos', [340, 640]),
             config.getSubkey('layout', 'favs_back_button_size', [45, 45]),
-            config.getSubkey('layout', 'favs_back_button_asset', 'assets/PrevTrackBtn.png')
+            config.getSubkey('layout', 'favs_back_button_asset', 'assets/DownBtn.png')
         )
 
         self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)
+
+        # favorites slides up over now playing: 0 = hidden, 1 = fully open
+        self.favsSlide = 0.0
+        self.favsSlideTarget = 0.0
+        self.favsSlideTime = config.getSubkey('layout', 'favs_slide_time', 0.3)
+        self.favsPanel = pygame.Surface((self.screenSize, self.screenSize))
+        self.favsPanelColor = config.getSubkey('layout', 'favs_panel_color', [0, 0, 0])
 
     def getFontForElement(self, itemName):
         fontName = self.config.getSubkey('layout', f'{itemName}_font_asset', 'assets/PublicSans-Medium.ttf')
@@ -321,7 +328,8 @@ class WPDisplay:
         self.speakerTextItem.render(self.screen)
 
 
-    def _draw_centered_text(self, text, color=(255,255,255), shadow=True, yPos = -999, font = None):
+    def _draw_centered_text(self, text, color=(255,255,255), shadow=True, yPos = -999, font = None, surface = None):
+        target = self.screen if surface is None else surface
         if font is None:
             renderFont = self.fallbackFont
         else:
@@ -336,10 +344,10 @@ class WPDisplay:
         if shadow:
             shadow_surf = renderFont.render(text, True, self.textShadowColor)
             shadow_rect = shadow_surf.get_rect(center=(self.screenSize // 2 + xOff, yPos + yOff))
-            self.screen.blit(shadow_surf, shadow_rect)
+            target.blit(shadow_surf, shadow_rect)
         surf = renderFont.render(text, True, color)
         rect = surf.get_rect(center=(self.screenSize // 2, yPos))
-        self.screen.blit(surf, rect)
+        target.blit(surf, rect)
 
 
     def renderInfo(self, deltaTime):
@@ -371,18 +379,40 @@ class WPDisplay:
         self._draw_centered_text("Yes", (255,255,255), shadow=True, yPos = 200, font=self.uiHeaderFont)
         self._draw_centered_text("No", (255,255,255), shadow=True, yPos = 500, font=self.uiHeaderFont)
 
+    def openFavorites(self):
+        self.displayState = WpDisplayState.FAVORITES
+        self.favsSlideTarget = 1.0
+
+    def closeFavorites(self):
+        self.favsSlideTarget = 0.0
+
+    def favsSliding(self):
+        return self.favsSlide != self.favsSlideTarget
+
     def renderFavorites(self, deltaTime):
-        if self.bgImage:
-            self.screen.blit(self.bgImage, (0, 0))
-        else:
-            self.screen.fill((128, 128, 128))
+        self.favsSlide = moveToward(self.favsSlide, self.favsSlideTarget, deltaTime / self.favsSlideTime)
+        if self.favsSlide == 0.0 and self.favsSlideTarget == 0.0:
+            self.displayState = WpDisplayState.INFO
+            self.renderInfo(deltaTime)
+            return
 
-        self._draw_centered_text("Favorites", (255,255,255), shadow=True, yPos = 60, font=self.uiHeaderFont)
+        # now playing stays live underneath while the panel moves
+        if self.favsSlide < 1.0:
+            self.renderInfo(deltaTime)
 
-        self.favContentDisplay.render(self.screen)
+        panel = self.favsPanel
+        panel.fill(self.favsPanelColor)
+
+        self._draw_centered_text("Favorites", (255,255,255), shadow=True, yPos = 60, font=self.uiHeaderFont, surface=panel)
+
+        self.favContentDisplay.render(panel)
 
         if self.favsBackButton:
-            self.favsBackButton.render(self.screen)
+            self.favsBackButton.render(panel)
+
+        # ease out: fast start, gentle stop
+        eased = 1 - (1 - self.favsSlide) ** 3
+        self.screen.blit(panel, (0, int((1 - eased) * self.screenSize)))
 
     def render(self, deltaTime):
         if self.displayState == WpDisplayState.INFO:
@@ -425,7 +455,7 @@ class WPDisplay:
 
     def checkButtonTap(self, event_pos):
         if self.favsButton and self.favsButton.check_tap(event_pos):
-            self.displayState = WpDisplayState.FAVORITES
+            self.openFavorites()
             return True
         if self.volumeButton and self.volumeButton.check_tap(event_pos):
             return True  # disabled for now; swallow the tap so it doesn't open quit confirm
@@ -464,12 +494,16 @@ class WPDisplay:
         self.displayState = WpDisplayState.QUIT_CONFIRM
 
     def handleTapFavorites(self, position):
+        # button rects are in panel coordinates, which only match the screen once fully open
+        if self.favsSliding():
+            return
+
         if self.favsBackButton and self.favsBackButton.check_tap(position):
-            self.displayState = WpDisplayState.INFO
+            self.closeFavorites()
         elif self.favContentDisplay.checkPageTap(position):
             pass
         elif self.favContentDisplay.checkTileTap(position):
-            self.displayState = WpDisplayState.INFO
+            self.closeFavorites()
 
     def handleTapConfirm(self, position):
         if position[1] > self.screenSize//2:

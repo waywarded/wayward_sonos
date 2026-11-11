@@ -22,15 +22,18 @@ class WpFavContentDisplay:
         self.labelFont = parent.getFontForElement('favs_label')
         self.labelColor = config.getSubkey('layout', 'favs_label_color', [255, 255, 255])
 
+        hitPadding = config.getSubkey('layout', 'button_hit_padding', 20)
         self.prevPageButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_prev_page_pos', [50, 320]),
             config.getSubkey('layout', 'favs_prev_page_size', [30, 30]),
-            config.getSubkey('layout', 'favs_prev_page_asset', 'assets/PrevTrackBtn.png')
+            config.getSubkey('layout', 'favs_prev_page_asset', 'assets/PrevTrackBtn.png'),
+            hitPadding=hitPadding
         )
         self.nextPageButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_next_page_pos', [650, 320]),
             config.getSubkey('layout', 'favs_next_page_size', [30, 30]),
-            config.getSubkey('layout', 'favs_next_page_asset', 'assets/NextTrackBtn.png')
+            config.getSubkey('layout', 'favs_next_page_asset', 'assets/NextTrackBtn.png'),
+            hitPadding=hitPadding
         )
 
         self.page = 0

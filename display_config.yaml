@@ -64,6 +64,9 @@ layout:
 
   play_state_y: 520
 
+  # extra tap area around small buttons (art size unchanged)
+  button_hit_padding: 20
+
   next_button_pos: [650, 320]
   prev_button_pos: [50, 320]
   next_button_asset: "assets/NextTrackBtn.png"

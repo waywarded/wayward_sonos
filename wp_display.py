@@ -82,53 +82,63 @@ class WPDisplay:
         self.playStateDisplay = PlayStateDisplay(self)
         self.wpStatus.log("Pygame initialized", logging.INFO)
 
+        hitPadding = config.getSubkey('layout', 'button_hit_padding', 20)
+
         self.nextButton = WPDisplayButton(
             config.getSubkey('layout', 'next_button_pos', [600, 320]),
             config.getSubkey('layout', 'next_button_size', [60, 60]),
-            config.getSubkey('layout', 'next_button_asset', 'assets/NextTrackBtn.png')
+            config.getSubkey('layout', 'next_button_asset', 'assets/NextTrackBtn.png'),
+            hitPadding=hitPadding
         )
 
         self.prevButton = WPDisplayButton(
             config.getSubkey('layout', 'prev_button_pos', [540, 320]),
             config.getSubkey('layout', 'prev_button_size', [30, 30]),
-            config.getSubkey('layout', 'prev_button_asset', 'assets/PrevTrackBtn.png')
+            config.getSubkey('layout', 'prev_button_asset', 'assets/PrevTrackBtn.png'),
+            hitPadding=hitPadding
         )
 
         self.playButton = WPDisplayButton(
             config.getSubkey('layout', 'play_button_pos', [340, 700]),
             config.getSubkey('layout', 'play_button_size', [40, 40]),
-            config.getSubkey('layout', 'play_button_asset', 'assets/PlayBtn.png')
+            config.getSubkey('layout', 'play_button_asset', 'assets/PlayBtn.png'),
+            hitPadding=hitPadding
         )
 
         self.pauseButton = WPDisplayButton(
             config.getSubkey('layout', 'play_button_pos', [340, 640]),
             config.getSubkey('layout', 'play_button_size', [30, 30]),
-            config.getSubkey('layout', 'pause_button_asset', 'assets/PauseBtn.png')
+            config.getSubkey('layout', 'pause_button_asset', 'assets/PauseBtn.png'),
+            hitPadding=hitPadding
         )
 
         self.favsButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_button_pos', [230, 640]),
             config.getSubkey('layout', 'favs_button_size', [45, 45]),
-            config.getSubkey('layout', 'favs_button_asset', 'assets/FavsBtn.png')
+            config.getSubkey('layout', 'favs_button_asset', 'assets/FavsBtn.png'),
+            hitPadding=hitPadding
         )
 
         # drawn but does nothing until the volume control exists
         self.volumeButton = WPDisplayButton(
             config.getSubkey('layout', 'volume_button_pos', [450, 640]),
             config.getSubkey('layout', 'volume_button_size', [45, 45]),
-            config.getSubkey('layout', 'volume_button_asset', 'assets/VolBtn.png')
+            config.getSubkey('layout', 'volume_button_asset', 'assets/VolBtn.png'),
+            hitPadding=hitPadding
         )
 
         self.favsBackButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_back_button_pos', [340, 640]),
             config.getSubkey('layout', 'favs_back_button_size', [45, 45]),
-            config.getSubkey('layout', 'favs_back_button_asset', 'assets/DownBtn.png')
+            config.getSubkey('layout', 'favs_back_button_asset', 'assets/DownBtn.png'),
+            hitPadding=hitPadding
         )
 
         self.favsRefreshButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_refresh_button_pos', [425, 45]),
             config.getSubkey('layout', 'favs_refresh_button_size', [30, 30]),
-            config.getSubkey('layout', 'favs_refresh_button_asset', 'assets/RefreshBtn.png')
+            config.getSubkey('layout', 'favs_refresh_button_asset', 'assets/RefreshBtn.png'),
+            hitPadding=hitPadding
         )
 
         self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)

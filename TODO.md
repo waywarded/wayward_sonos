@@ -26,7 +26,7 @@ One step at a time, each tested before the next.
 7. **Bigger hit boxes.** `WPDisplayButton` gets a tap padding around its art (`button_hit_padding`, 20px) for the small buttons: prev/next, play/pause, favorites, volume, back, refresh, page arrows. Art size unchanged; favorites tiles get no padding (their gaps are smaller than that).
    Test: taps just outside the art still hit; neighboring tap areas don't overlap. Done.
 8. **Press-and-hold to quit.** Replace "tap any blank spot → quit confirm" with an invisible hold area above the song title, where the room name is (`quit_hold_area`, `quit_hold_time` ~1.5s). Only on now playing, not while favorites is up. Holding long enough opens the existing quit confirm. Blank taps then do nothing.
-   Test: short tap does nothing; hold opens confirm; hold elsewhere or with favorites up does nothing; releasing early cancels.
+   Test: short tap does nothing; hold opens confirm; hold elsewhere or with favorites up does nothing; releasing early cancels. Done (`quit_hold_area` [200, 10, 320, 85], `quit_hold_time` 1.5s). No visual feedback while holding yet.
 9. **Line-in favorite.** Always the first favorite, on the screen grid and the Stream Deck, when the room config names the speaker with the line-in (`line_in_device`, e.g. "Front Room"). Uses the existing `line_in_track_image` art and `line_in_track_name` label. Picking it sends the same `content`/`play_fav` event; `handleContentEvent` switches the main group's coordinator to that speaker's line-in (`switch_to_line_in(source=...)`).
    Test: present with 0 favorites and with several; absent when `line_in_device` isn't set; plays the record player on Front Room.
 10. Later: a UI for switching which device/group the display controls.

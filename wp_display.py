@@ -150,6 +150,12 @@ class WPDisplay:
         self.favsPanel = pygame.Surface((self.screenSize, self.screenSize))
         self.favsPanelColor = config.getSubkey('layout', 'favs_panel_color', [0, 0, 0])
 
+        # quitting is press-and-hold on an invisible area above the song title, so it can't happen by accident
+        holdArea = config.getSubkey('layout', 'quit_hold_area', [200, 10, 320, 85])
+        self.quitHoldRect = pygame.Rect(holdArea[0], holdArea[1], holdArea[2], holdArea[3])
+        self.quitHoldTime = config.getSubkey('layout', 'quit_hold_time', 1.5)
+        self.quitHoldElapsed = None     # None when not holding
+
     def getFontForElement(self, itemName):
         fontName = self.config.getSubkey('layout', f'{itemName}_font_asset', 'assets/PublicSans-Medium.ttf')
         fontSize = self.config.getSubkey('layout', f'{itemName}_font_size', 24)
@@ -433,7 +439,17 @@ class WPDisplay:
         eased = 1 - (1 - self.favsSlide) ** 3
         self.screen.blit(panel, (0, int((1 - eased) * self.screenSize)))
 
+    def updateQuitHold(self, deltaTime):
+        if self.quitHoldElapsed is None:
+            return
+        self.quitHoldElapsed += deltaTime
+        if self.quitHoldElapsed >= self.quitHoldTime:
+            self.quitHoldElapsed = None
+            self.displayState = WpDisplayState.QUIT_CONFIRM
+
     def render(self, deltaTime):
+        if self.displayState == WpDisplayState.INFO:
+            self.updateQuitHold(deltaTime)
         if self.displayState == WpDisplayState.INFO:
             self.renderInfo(deltaTime)
         elif self.displayState == WpDisplayState.FAVORITES:
@@ -510,7 +526,11 @@ class WPDisplay:
     def handleTapInfo(self, position):
         if self.checkButtonTap(position):
             return
-        self.displayState = WpDisplayState.QUIT_CONFIRM
+        if self.quitHoldRect.collidepoint(position):
+            self.quitHoldElapsed = 0.0
+
+    def handleRelease(self, position):
+        self.quitHoldElapsed = None
 
     def handleTapFavorites(self, position):
         # button rects are in panel coordinates, which only match the screen once fully open
@@ -554,6 +574,9 @@ class WPDisplay:
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.handleTap(event.pos)
+
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    self.handleRelease(event.pos)
                 
             
             if self.displayState == WpDisplayState.QUITTING:

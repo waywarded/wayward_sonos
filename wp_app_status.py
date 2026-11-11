@@ -1,4 +1,5 @@
 import logging
+import threading
 from enum import Enum
 from wp_app_state import WpAppState
 from wp_fav_art import WPFavArtCache
@@ -16,6 +17,12 @@ class WPAppStatus:
         self.favsRefreshRequested = False
         self.favsFetching = False
         self.favArt = WPFavArtCache()
+
+        # group volume of the main device; the volume dial asks, the Sonos volume worker does the network calls
+        self.groupVolume = None
+        self.volumeReadRequested = False
+        self._volumeTarget = None
+        self._volumeLock = threading.Lock()
 
     def updateStatus(self, newStatus):
         self.status = newStatus
@@ -58,6 +65,20 @@ class WPAppStatus:
     # the display can't wait on the network, so it asks and the Sonos thread does the fetch
     def requestFavsRefresh(self):
         self.favsRefreshRequested = True
+
+    def requestVolume(self, volume):
+        with self._volumeLock:
+            self._volumeTarget = volume
+
+    # hands the latest requested volume to the worker exactly once; anything requested before it is superseded
+    def takeVolumeTarget(self):
+        with self._volumeLock:
+            volume = self._volumeTarget
+            self._volumeTarget = None
+            return volume
+
+    def requestVolumeRead(self):
+        self.volumeReadRequested = True
 
     def favsRefreshPending(self):
         return self.favsRefreshRequested or self.favsFetching

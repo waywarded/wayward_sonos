@@ -238,6 +238,7 @@ class WPSoco:
             return
 
         self.fetchState()
+        self.status.requestVolumeRead()
         try:
             self.fetchFavs()
         except Exception as e:
@@ -352,6 +353,34 @@ class WPSoco:
         self.status.updateStatus("Starting Sonos discovery thread...")
         t = threading.Thread(target=self.socoThread, daemon=True)
         t.start()
+        v = threading.Thread(target=self.volumeThread, daemon=True)
+        v.start()
+
+    # separate from socoThread, which can sit in an event wait or a favorites fetch for seconds;
+    # the volume dial needs its changes sent within a fraction of a second
+    def volumeThread(self):
+        while True:
+            self.checkVolume()
+            time.sleep(0.05)
+
+    def checkVolume(self):
+        if self.status.appState != WpAppState.CONNECTED or self.mainDevice is None:
+            self.status.takeVolumeTarget()  # drop it: don't apply a stale level after reconnecting
+            return
+        try:
+            target = self.status.takeVolumeTarget()
+            if target is not None:
+                # not group.volume's setter: it re-snapshots on every call, and Sonos uses the snapshot to keep
+                # speakers' relative levels through a change, so take it once per dial session (the read below)
+                coordinator = self.mainDevice.group.coordinator
+                coordinator.groupRenderingControl.SetGroupVolume(
+                    [("InstanceID", 0), ("DesiredVolume", max(0, min(int(target), 100)))])
+                self.status.groupVolume = target
+            elif self.status.volumeReadRequested:
+                self.status.volumeReadRequested = False
+                self.status.groupVolume = self.mainDevice.group.volume   # also snapshots the group volume
+        except Exception as e:
+            self.status.log(f"Volume exception: {e}", logging.ERROR)
 
     def handleTransportEvent(self,**kwargs):
         print (f'transport event: {kwargs}')

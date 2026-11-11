@@ -8,6 +8,7 @@ from wp_marquee_text import WPMarqueeText
 from wp_autosplit_text import WpAutoSplitText
 from wp_app_state import WpAppState
 from wp_display_button import WPDisplayButton
+from wp_fav_content_display import WpFavContentDisplay
 from wp_soco import NowPlayingInfo
 
 from enum import Enum
@@ -123,6 +124,8 @@ class WPDisplay:
             config.getSubkey('layout', 'favs_back_button_size', [45, 45]),
             config.getSubkey('layout', 'favs_back_button_asset', 'assets/PrevTrackBtn.png')
         )
+
+        self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)
 
     def getFontForElement(self, itemName):
         fontName = self.config.getSubkey('layout', f'{itemName}_font_asset', 'assets/PublicSans-Medium.ttf')
@@ -376,6 +379,8 @@ class WPDisplay:
 
         self._draw_centered_text("Favorites", (255,255,255), shadow=True, yPos = 60, font=self.uiHeaderFont)
 
+        self.favContentDisplay.render(self.screen)
+
         if self.favsBackButton:
             self.favsBackButton.render(self.screen)
 
@@ -460,6 +465,10 @@ class WPDisplay:
 
     def handleTapFavorites(self, position):
         if self.favsBackButton and self.favsBackButton.check_tap(position):
+            self.displayState = WpDisplayState.INFO
+        elif self.favContentDisplay.checkPageTap(position):
+            pass
+        elif self.favContentDisplay.checkTileTap(position):
             self.displayState = WpDisplayState.INFO
 
     def handleTapConfirm(self, position):

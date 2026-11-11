@@ -47,9 +47,7 @@ class WPAppStatus:
             for listener in self.buttonEventListeners[eventName]:
                 listener(**kwargs)
 
-    def clearFavs(self):
-        self.sonosFavs.clear()
-    
-    def addFav(self, title, favResource):
-        self.sonosFavs[title] = favResource
+    # swap in a whole new dict: other threads iterate sonosFavs, so never mutate it in place
+    def setFavs(self, newFavs : dict):
+        self.sonosFavs = newFavs
     

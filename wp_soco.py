@@ -9,6 +9,13 @@ import queue
 
 from soco.core import DidlPlaylistContainer
 
+# dev aid: stands in for a Sonos favorite (--fake_favs); no reference, so playing it does nothing
+@dataclass
+class FakeFav:
+    title: str
+    reference: object = None
+
+
 @dataclass
 class NowPlayingInfo:
     title: str = "Unknown Title"
@@ -37,8 +44,9 @@ class NowPlayingInfo:
 
 class WPSoco:
 
-    def __init__(self, config, appStatus):
+    def __init__(self, config, appStatus, fakeFavCount=None):
         self.config = config
+        self.fakeFavCount = fakeFavCount
         self.status : WPAppStatus = appStatus
         self.mainDevice = None
         self.mainHouseholdDevices = []
@@ -175,17 +183,26 @@ class WPSoco:
                                              lineIn,
                                              transportState,
                                              deviceString=deviceStr))
-            self.status.clearFavs()
+            self.fetchFavs()
+            return True
+        except Exception as e:
+            self.status.log(f"Error fetching state: {e}", logging.ERROR)
+            return False
+
+    def fetchFavs(self):
+        newFavs = {}
+        if self.fakeFavCount is not None:
+            for i in range(self.fakeFavCount):
+                title = f"Fake Favorite {i+1}"
+                newFavs[title] = FakeFav(title)
+        else:
             sonos_favs = self.mainCoordinator().music_library.get_sonos_favorites()
             for fav in sonos_favs:
                 print(f"title: {fav.title}")
                 print(f"ref: {fav.reference}")
                 print(f"resources: {fav.resources}")
-                self.status.addFav(fav.title, fav)
-            return True
-        except Exception as e:
-            self.status.log(f"Error fetching state: {e}", logging.ERROR)
-            return False
+                newFavs[fav.title] = fav
+        self.status.setFavs(newFavs)
 
     def fetchInitialState(self):
         if self.mainDevice is None:

@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--display_config', default='display_config.yaml', help="path to display configuration")
     parser.add_argument('-f','--fullscreen',action='store_true')
     parser.add_argument('-r','--round',action='store_true', help='dev aid: mask the window to the round display')
+    parser.add_argument('--fake_favs', type=int, default=None, help='dev aid: replace Sonos favorites with N fake ones')
 
     args = parser.parse_args()
     configPath = args.config
@@ -50,7 +51,7 @@ def main():
     signal.signal(signal.SIGUSR1, lambda signum, frame: wpDisplay.requestScreenshot())
 
     # initialize soco thread.
-    wpSoco = WPSoco(wpConfig, wpStatus)
+    wpSoco = WPSoco(wpConfig, wpStatus, fakeFavCount=args.fake_favs)
     wpSoco.start()
 
     wpStreamdeck = WPStreamDeckUI(wpConfig, wpStatus)

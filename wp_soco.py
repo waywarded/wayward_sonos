@@ -143,8 +143,8 @@ class WPSoco:
             lineIn = True
 
         transportInfo = coordinator.get_current_transport_info()
-        transportState = transportInfo[
-            'current_transport_state'] if transportInfo else 'STOPPED'
+        print(f'transport info:{transportInfo}')
+        transportState = transportInfo['current_transport_state'] if transportInfo else 'STOPPED'
 
         # get all speakers attached to main device group
         deviceStr = ""
@@ -160,7 +160,7 @@ class WPSoco:
         self.status.logSilent(f"current device group:{deviceStr}")
 
         try:
-            currentVolume = self.coordinator().volume
+            currentVolume = self.mainCoordinator().volume
             currentTrack = self.mainCoordinator().get_current_track_info()
             self.status.logSilent(f"------")
             self.status.log(
@@ -219,6 +219,7 @@ class WPSoco:
                 self.status.log(
                     f"Subscribing to Sonos events for main device '{self.mainDevice.player_name}'...",
                     logging.INFO)
+                print("get coordinator")
                 self.coordinator = self.mainDevice.group.coordinator
                 self.sub = self.coordinator.avTransport.subscribe()
                 self.status.updateAppState(WpAppState.CONNECTED)
@@ -233,13 +234,13 @@ class WPSoco:
     def checkConnection(self):
         # self.status.logSilent(f"Checking connection...")
 
-        if self.mainDevice is None or self.coordinator() is None:
+        if self.mainDevice is None or self.mainCoordinator() is None:
             self.status.logSilent(f"No device - NO CONNECTION...")
             self.sub = None
             return False
 
         try:
-            self.coordinator().get_speaker_info(refresh=True, timeout=2.0)
+            self.mainCoordinator().get_speaker_info(refresh=True, timeout=2.0)
         except Exception as e:
             self.status.logSilent(f"Connection check exception: {str(e)}")
             return False
@@ -349,19 +350,14 @@ class WPSoco:
                                 self.mainCoordinator().clear_queue()
                                 self.mainCoordinator().add_to_queue(fav.reference)
                                 self.mainCoordinator().play_from_queue(0)
-
-                            # self.status.log(f'queue: {fav}')
-                            # self.mainDevice.clear_queue()
-
-                            # self.mainDevice.add_to_queue(fav)
-                            # time.sleep(0.5)
-                            # self.status.log(f'play from queue: (0)')
-                            # self.mainDevice.play_from_queue(0)
+                                time.sleep(.5)
+                                self.fetchState()
         except Exception as e:
             self.status.log(f"Exception sending command {e}")
 
 
     def mainCoordinator(self):
+        print("get coordinator")
         if self.mainDevice is None:
             return None
         return self.mainDevice.group.coordinator

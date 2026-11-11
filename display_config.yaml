@@ -62,7 +62,20 @@ layout:
   ui_header_font_size: 24
   ui_header_font_asset: 'assets/PublicSans-Bold.ttf'
 
-  play_state_y: 660
+  play_state_y: 520
+
+  next_button_pos: [650, 320]
+  prev_button_pos: [50, 320]
+  next_button_asset: "assets/NextTrackBtn.png"
+  prev_button_asset: "assets/PrevTrackBtn.png"
+  next_button_size: [30, 30]
+  prev_button_size: [30, 30]
+
+  play_button_pos: [340, 640]
+  play_button_asset: "assets/PlayBtn.png"
+  play_button_size: [45, 45]
+  pause_button_asset: "assets/PauseBtn.png"
+
 
 deck:
   play_button_asset: 'assets/PlayBtn.png'

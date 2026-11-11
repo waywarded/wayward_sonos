@@ -7,6 +7,9 @@ from play_state_display import PlayStateDisplay
 from wp_marquee_text import WPMarqueeText
 from wp_autosplit_text import WpAutoSplitText
 from wp_app_state import WpAppState
+from wp_display_button import WPDisplayButton
+from wp_soco import NowPlayingInfo
+
 from enum import Enum
 
 class WpDisplayState(Enum):
@@ -74,7 +77,29 @@ class WPDisplay:
         self.playStateDisplay = PlayStateDisplay(self)
         self.wpStatus.log("Pygame initialized", logging.INFO)
 
-        
+        self.nextButton = WPDisplayButton(
+            config.getSubkey('layout', 'next_button_pos', [600, 320]),
+            config.getSubkey('layout', 'next_button_size', [60, 60]),
+            config.getSubkey('layout', 'next_button_asset', 'assets/NextTrackBtn.png')
+        )
+
+        self.prevButton = WPDisplayButton(
+            config.getSubkey('layout', 'prev_button_pos', [540, 320]),
+            config.getSubkey('layout', 'prev_button_size', [30, 30]),
+            config.getSubkey('layout', 'prev_button_asset', 'assets/PrevTrackBtn.png')
+        )
+
+        self.playButton = WPDisplayButton(
+            config.getSubkey('layout', 'play_button_pos', [340, 700]),
+            config.getSubkey('layout', 'play_button_size', [40, 40]),
+            config.getSubkey('layout', 'play_button_asset', 'assets/PlayBtn.png')
+        )
+
+        self.pauseButton = WPDisplayButton(
+            config.getSubkey('layout', 'play_button_pos', [340, 640]),
+            config.getSubkey('layout', 'play_button_size', [30, 30]),
+            config.getSubkey('layout', 'pause_button_asset', 'assets/PauseBtn.png')
+        )
 
     def getFontForElement(self, itemName):
         fontName = self.config.getSubkey('layout', f'{itemName}_font_asset', 'assets/PublicSans-Medium.ttf')
@@ -188,6 +213,20 @@ class WPDisplay:
         self.artistTextItem.render(self.screen)        
         self.albumTextItem.render(self.screen)
         self.speakerTextItem.render(self.screen)
+        self.renderButtons(trackInfo)
+
+    def renderButtons(self, trackinfo : NowPlayingInfo ):
+        if self.nextButton:
+            self.nextButton.render(self.screen)
+        if self.prevButton:
+            self.prevButton.render(self.screen)
+        
+        if trackinfo.isPlaying():
+            if self.pauseButton:
+                self.pauseButton.render(self.screen)
+        else:
+            if self.playButton:
+                self.playButton.render(self.screen)
 
 
     def renderTrackInfoLineIn(self,trackInfo, deltaTime):
@@ -285,7 +324,6 @@ class WPDisplay:
         self._draw_centered_text("No", (255,255,255), shadow=True, yPos = 500, font=self.uiHeaderFont)
 
     def render(self, deltaTime):
-
         if self.displayState == WpDisplayState.INFO:
             self.renderInfo(deltaTime)
         elif self.displayState == WpDisplayState.QUIT_CONFIRM:
@@ -294,9 +332,30 @@ class WPDisplay:
         pygame.display.flip()  # Update the display
 
 
- 
+    def checkButtonTap(self, event_pos):
+        if (self.pauseButton and self.pauseButton.check_tap(event_pos)) or (self.playButton and self.playButton.check_tap(event_pos)):
+            print("pause button pressed")
+            trackInfo = self.wpStatus.latestTrackInfo
+            if trackInfo.isPlaying():
+                self.wpStatus.dispatchEvent('transport', control='pause')
+            else:
+                self.wpStatus.dispatchEvent('transport', control='play')
+            return True
+        if self.nextButton and self.nextButton.check_tap(event_pos):
+            self.wpStatus.dispatchEvent('transport', control='next')
+            print("next button pressed")
+            return True
+        if self.prevButton and self.prevButton.check_tap(event_pos):
+            self.wpStatus.dispatchEvent('transport', control='prev')
+            print("prev button pressed")
+            return True
+        return False
+
     def handleTap(self, position):
         self.wpStatus.logSilent(f"Tap: {str(position)}")
+        if self.checkButtonTap(position):
+            return
+
         if self.displayState == WpDisplayState.QUIT_CONFIRM:
             self.handleTapConfirm(position)
         elif self.displayState == WpDisplayState.INFO:

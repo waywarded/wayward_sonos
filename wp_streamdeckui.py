@@ -1,11 +1,13 @@
 import threading
 import time
 import logging
+import requests
+from io import BytesIO
 
 import StreamDeck
 from StreamDeck.DeviceManager import DeviceManager
 from StreamDeck.ImageHelpers import PILHelper
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from wp_app_status import WPAppStatus, WpAppState
 
 class WPStreamDeckUI:
@@ -27,7 +29,7 @@ class WPStreamDeckUI:
                 time.sleep(5)
             else:
                 self._updateTransportButtons()
-
+                self._setupFavButtons()
             time.sleep(1)
 
     def _tryConnect(self):
@@ -48,8 +50,9 @@ class WPStreamDeckUI:
             logging.warning(f"failed to connect to streamdeck device: {e}")
             return
         self._setupTransportButtons()
+        self._setupFavButtons()
 
-    def _setupButton(self, buttonId, imagePath, command, params):
+    def _setupButton(self, buttonId, imagePath, command, params, isCommand = True):
         if self.deckDevice is None:
             return
 
@@ -63,7 +66,93 @@ class WPStreamDeckUI:
         nativeImg = PILHelper.to_native_format(self.deckDevice, img)
         self.deckDevice.set_key_image(buttonId, nativeImg)
 
-        self.commandButtons[buttonId] = command
+        if isCommand:
+            self.commandButtons[buttonId] = {'command':command,'params':params}
+        else:
+            self.contentButtons[buttonId] = {'command':command,'params':params}
+
+
+    def _setupButtonWithLabel(self, buttonId, image, label, command, params, isCommand):
+        if self.deckDevice is None:
+            return
+
+        target_size = self.deckDevice.key_image_format()['size']
+
+        if image is None:
+            img = Image.new('RGB', target_size, (50,70,50))
+            draw = ImageDraw.Draw(img)
+        else:
+            img = image.resize(target_size)
+            draw = ImageDraw.Draw(img)
+        
+        # try progressively smaller fonts before splitting/truncating
+        font = None
+        fontSizes = [14, 12, 10]
+        for fontSize in fontSizes:
+            try:
+                f = ImageFont.truetype('assets/PublicSans-Medium.ttf', fontSize)
+            except:
+                f = ImageFont.load_default()
+            font = f
+            bbox = draw.textbbox((0, 0), label, font=font)
+            if bbox[2] - bbox[0] <= target_size[0] - 8:
+                break  # fits at this size
+        
+        w, h = target_size
+        maxWidth = w - 8
+        
+        # try to fit on one line first
+        bbox = draw.textbbox((0, 0), label, font=font)
+        if bbox[2] - bbox[0] > maxWidth:
+            # try balanced two-line split
+            words = re.split(r'\s+|(?<=\-)', label)
+            bestSplit = None
+            bestDiff = float('inf')
+            
+            for i in range(1, len(words)):
+                line1 = ' '.join(words[:i])
+                line2 = ' '.join(words[i:])
+                w1 = draw.textbbox((0, 0), line1, font=font)[2]
+                w2 = draw.textbbox((0, 0), line2, font=font)[2]
+                if w1 > maxWidth or w2 > maxWidth:
+                    continue
+                diff = abs(w1 - w2)
+                if diff < bestDiff:
+                    bestDiff = diff
+                    bestSplit = i
+            
+            if bestSplit:
+                lines = [' '.join(words[:bestSplit]), ' '.join(words[bestSplit:])]
+            else:
+                # truncate single line
+                text = label
+                while text and draw.textbbox((0, 0), text + '...', font=font)[2] > maxWidth:
+                    text = text[:-1]
+                lines = [text + '...']
+        else:
+            lines = [label]
+        
+        # measure and draw centered
+        lineHeight = draw.textbbox((0, 0), 'Ag', font=font)[3]
+        gap = 4
+        totalH = len(lines) * lineHeight + (len(lines) - 1) * gap
+        startY = (h - totalH) // 2
+        
+        for i, line in enumerate(lines):
+            bbox = draw.textbbox((0, 0), line, font=font)
+            x = (w - (bbox[2] - bbox[0])) // 2
+            y = startY + i * (lineHeight + gap) - bbox[1]
+            draw.text((x + 1, y + 1), line, font=font, fill=(0, 0, 0))
+            draw.text((x, y), line, font=font, fill=(255, 255, 255))
+        
+        nativeImg = PILHelper.to_native_format(self.deckDevice, img)
+        self.deckDevice.set_key_image(buttonId, nativeImg)
+
+        if isCommand:
+            self.commandButtons[buttonId] = {'command': command, 'params': params}
+        else:
+            self.contentButtons[buttonId] = {'command': command, 'params': params}
+
 
     def _setupTransportButtons(self):
         self.commandButtons.clear()
@@ -83,6 +172,34 @@ class WPStreamDeckUI:
         asset = self.config.getSubkey('deck', 'prev_button_asset')
         self._setupButton(1, asset, 'prev', [])
 
+
+    def _setupFavButtons(self):
+        self.contentButtons.clear()
+        if self.status is None:
+            return
+
+        buttonId = 5
+        for fav in self.status.sonosFavs.keys():
+            # img = self._get_image_from_fav(self.status.sonosFavs[fav])
+            # TODO: cache images using the above so we don't fetch them every single time.
+            img = None
+            self._setupButtonWithLabel(buttonId, img, fav, 'play_fav', {'fav' : self.status.sonosFavs[fav]}, False)
+            buttonId += 1
+
+    
+
+    def _get_image_from_fav(self, fav):
+        url = getattr(fav, 'album_art_uri', None)
+        if not url:
+            return None
+        try:
+            response = requests.get(url, timeout=3)
+            response.raise_for_status()
+            img = Image.open(BytesIO(response.content)).convert('RGB')
+            return img
+        except Exception as e:
+            logging.warning(f"Failed to fetch art for {fav.title}: {e}")
+            return None        
 
     def _updateTransportButtons(self):
         if self.deckDevice is None:
@@ -113,11 +230,16 @@ class WPStreamDeckUI:
         if key in self.commandButtons:
             print(f'command: {self.commandButtons[key]}')
             if state != 0 and not self.status is None:
-                self.status.dispatchEvent('transport',control = self.commandButtons[key])
-                
+                self.status.dispatchEvent('transport',control = self.commandButtons[key].get('command',''))
+        elif key in self.contentButtons:
+            print(f'content: {self.contentButtons[key]}')
+            if state != 0 and not self.status is None:
+                self.status.dispatchEvent('content',control = self.contentButtons[key].get('command',''), params = self.contentButtons[key].get('params',{}))
+
 
     def start(self):
         self.status.updateStatus("Starting Streamdeck thread...")
         self.running = True
         t = threading.Thread(target=self.connectAndMonitor, daemon=True)
         t.start()
+

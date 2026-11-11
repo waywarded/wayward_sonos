@@ -22,7 +22,12 @@ One step at a time, each tested before the next.
    Screen tiles: art (120px) with the name underneath; until art arrives, the first two letters on a solid tile (`favs_tile_size`, `favs_label_*`, `favs_initials_*`).
    Stream Deck keys still draw the name over the art, which is hard to read on light art (e.g. See-Through); consider a dark band or stronger shadow in `renderButtonLabel`.
 5. Later: a more circular favorites layout.
-6. Later: make the volume button work: open a volume control, maybe a drag control.
+6. **Volume dial** (branch `claude/volume-dial`, for Ed's review). Pressing the volume button turns the whole round screen into a dial while the finger stays down; releasing closes it.
+   - Relative: turning clockwise from where you pressed raises volume, counter-clockwise lowers it; `volume_dial_degrees` (270) of turning covers 0 to 100. Pressing never jumps the volume. Touches near the center (`volume_dial_dead_zone`) are ignored because the angle is unstable there. At 0 or 100 the dial stops, and reversing responds immediately.
+   - Controls the main device's group volume. Opens at the last known level and asks Sonos for a fresh reading in case it changed from the phone.
+   - Sends go through a small background worker in `WPSoco` that always sends the latest requested level, so dragging stays smooth and the display never waits on the network.
+   - Look: now playing dimmed behind; an arc near the edge showing the level; the number in the middle.
+   Test (headless, real speakers untouched): clockwise/counter-clockwise, crossing 12 o'clock, clamping at 0/100, dead zone, release closes, worker sends only the latest value and skips repeats.
 7. **Bigger hit boxes.** `WPDisplayButton` gets a tap padding around its art (`button_hit_padding`, 20px) for the small buttons: prev/next, play/pause, favorites, volume, back, refresh, page arrows. Art size unchanged; favorites tiles get no padding (their gaps are smaller than that).
    Test: taps just outside the art still hit; neighboring tap areas don't overlap. Done.
 8. **Press-and-hold to quit.** Replace "tap any blank spot → quit confirm" with an invisible hold area above the song title, where the room name is (`quit_hold_area`, `quit_hold_time` ~1.5s). Only on now playing, not while favorites is up. Holding long enough opens the existing quit confirm. Blank taps then do nothing.

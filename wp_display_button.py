@@ -6,12 +6,18 @@ class WPDisplayButton:
         self.rect = pygame.Rect(pos[0],pos[1],size[0],size[1])
         img_data = pygame.image.load(image)
         self.button_surface = pygame.transform.scale(img_data, (size[0], size[1]))
+        self.visible = True
+
+    def setVisible(self, visible):
+        self.visible = visible
 
     def render(self, screen):
-        screen.blit(self.button_surface, self.rect)
+        if self.visible:
+            screen.blit(self.button_surface, self.rect)
         
 
+    # hidden buttons can't be tapped
     def check_tap(self, position) -> bool:
-        return self.rect.collidepoint(position)
+        return self.visible and self.rect.collidepoint(position)
 
     

@@ -14,6 +14,7 @@ from enum import Enum
 
 class WpDisplayState(Enum):
     INFO="Info"
+    FAVORITES="Favorites"
     QUIT_CONFIRM="QuitConfirm"
     QUITTING="Quitting"
 
@@ -102,6 +103,25 @@ class WPDisplay:
             config.getSubkey('layout', 'play_button_pos', [340, 640]),
             config.getSubkey('layout', 'play_button_size', [30, 30]),
             config.getSubkey('layout', 'pause_button_asset', 'assets/PauseBtn.png')
+        )
+
+        self.favsButton = WPDisplayButton(
+            config.getSubkey('layout', 'favs_button_pos', [230, 640]),
+            config.getSubkey('layout', 'favs_button_size', [45, 45]),
+            config.getSubkey('layout', 'favs_button_asset', 'assets/FavsBtn.png')
+        )
+
+        # drawn but does nothing until the volume control exists
+        self.volumeButton = WPDisplayButton(
+            config.getSubkey('layout', 'volume_button_pos', [450, 640]),
+            config.getSubkey('layout', 'volume_button_size', [45, 45]),
+            config.getSubkey('layout', 'volume_button_asset', 'assets/VolBtn.png')
+        )
+
+        self.favsBackButton = WPDisplayButton(
+            config.getSubkey('layout', 'favs_back_button_pos', [340, 640]),
+            config.getSubkey('layout', 'favs_back_button_size', [45, 45]),
+            config.getSubkey('layout', 'favs_back_button_asset', 'assets/PrevTrackBtn.png')
         )
 
     def getFontForElement(self, itemName):
@@ -216,20 +236,37 @@ class WPDisplay:
         self.artistTextItem.render(self.screen)        
         self.albumTextItem.render(self.screen)
         self.speakerTextItem.render(self.screen)
-        self.renderButtons(trackInfo)
+
+    def buttonsVisible(self):
+        return self.wpStatus.appState == WpAppState.CONNECTED and self.wpStatus.latestTrackInfo is not None
+
+    # line-in can play/pause but has no tracks to skip
+    def skipButtonsVisible(self):
+        return self.buttonsVisible() and not self.wpStatus.latestTrackInfo.line_in
+
+    def updateButtonVisibility(self):
+        show = self.buttonsVisible()
+        playing = show and self.wpStatus.latestTrackInfo.isPlaying()
+        self.nextButton.setVisible(self.skipButtonsVisible())
+        self.prevButton.setVisible(self.skipButtonsVisible())
+        self.playButton.setVisible(show and not playing)
+        self.pauseButton.setVisible(playing)
+        self.favsButton.setVisible(show)
+        self.volumeButton.setVisible(show)
 
     def renderButtons(self, trackinfo : NowPlayingInfo ):
         if self.nextButton:
             self.nextButton.render(self.screen)
         if self.prevButton:
             self.prevButton.render(self.screen)
-        
-        if trackinfo.isPlaying():
-            if self.pauseButton:
-                self.pauseButton.render(self.screen)
-        else:
-            if self.playButton:
-                self.playButton.render(self.screen)
+        if self.pauseButton:
+            self.pauseButton.render(self.screen)
+        if self.playButton:
+            self.playButton.render(self.screen)
+        if self.favsButton:
+            self.favsButton.render(self.screen)
+        if self.volumeButton:
+            self.volumeButton.render(self.screen)
 
 
     def renderTrackInfoLineIn(self,trackInfo, deltaTime):
@@ -259,6 +296,8 @@ class WPDisplay:
                 self.renderTrackInfoLineIn(trackInfo, deltaTime)
             else:
                 self.renderTrackInfoStreaming(trackInfo, deltaTime)
+
+            self.renderButtons(trackInfo)
 
             self.playStateDisplay.update(deltaTime, trackInfo.isPlaying())
             self.playStateDisplay.render(self.screen, displayStatePosX, displayStatePosY)
@@ -301,6 +340,9 @@ class WPDisplay:
 
 
     def renderInfo(self, deltaTime):
+        # set every frame so taps match what's on screen
+        self.updateButtonVisibility()
+
         if self.bgImage:
             self.screen.blit(self.bgImage, (0, 0))  # Draw background image
         else:
@@ -326,9 +368,22 @@ class WPDisplay:
         self._draw_centered_text("Yes", (255,255,255), shadow=True, yPos = 200, font=self.uiHeaderFont)
         self._draw_centered_text("No", (255,255,255), shadow=True, yPos = 500, font=self.uiHeaderFont)
 
+    def renderFavorites(self, deltaTime):
+        if self.bgImage:
+            self.screen.blit(self.bgImage, (0, 0))
+        else:
+            self.screen.fill((128, 128, 128))
+
+        self._draw_centered_text("Favorites", (255,255,255), shadow=True, yPos = 60, font=self.uiHeaderFont)
+
+        if self.favsBackButton:
+            self.favsBackButton.render(self.screen)
+
     def render(self, deltaTime):
         if self.displayState == WpDisplayState.INFO:
             self.renderInfo(deltaTime)
+        elif self.displayState == WpDisplayState.FAVORITES:
+            self.renderFavorites(deltaTime)
         elif self.displayState == WpDisplayState.QUIT_CONFIRM:
             self.renderQuitConfirm(deltaTime)
 
@@ -364,6 +419,12 @@ class WPDisplay:
 
 
     def checkButtonTap(self, event_pos):
+        if self.favsButton and self.favsButton.check_tap(event_pos):
+            self.displayState = WpDisplayState.FAVORITES
+            return True
+        if self.volumeButton and self.volumeButton.check_tap(event_pos):
+            return True  # disabled for now; swallow the tap so it doesn't open quit confirm
+
         if (self.pauseButton and self.pauseButton.check_tap(event_pos)) or (self.playButton and self.playButton.check_tap(event_pos)):
             print("pause button pressed")
             trackInfo = self.wpStatus.latestTrackInfo
@@ -384,16 +445,22 @@ class WPDisplay:
 
     def handleTap(self, position):
         self.wpStatus.logSilent(f"Tap: {str(position)}")
-        if self.checkButtonTap(position):
-            return
 
         if self.displayState == WpDisplayState.QUIT_CONFIRM:
             self.handleTapConfirm(position)
         elif self.displayState == WpDisplayState.INFO:
             self.handleTapInfo(position)
+        elif self.displayState == WpDisplayState.FAVORITES:
+            self.handleTapFavorites(position)
             
     def handleTapInfo(self, position):
+        if self.checkButtonTap(position):
+            return
         self.displayState = WpDisplayState.QUIT_CONFIRM
+
+    def handleTapFavorites(self, position):
+        if self.favsBackButton and self.favsBackButton.check_tap(position):
+            self.displayState = WpDisplayState.INFO
 
     def handleTapConfirm(self, position):
         if position[1] > self.screenSize//2:

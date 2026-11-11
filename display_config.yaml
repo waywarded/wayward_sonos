@@ -76,6 +76,20 @@ layout:
   play_button_size: [45, 45]
   pause_button_asset: "assets/PauseBtn.png"
 
+  favs_button_pos: [230, 640]
+  favs_button_size: [45, 45]
+  favs_button_asset: "assets/FavsBtn.png"
+
+  # disabled until the volume control exists
+  volume_button_pos: [450, 640]
+  volume_button_size: [45, 45]
+  volume_button_asset: "assets/VolBtn.png"
+
+  # favorites screen; placeholder art
+  favs_back_button_pos: [340, 640]
+  favs_back_button_size: [45, 45]
+  favs_back_button_asset: "assets/PrevTrackBtn.png"
+
 
 deck:
   play_button_asset: 'assets/PlayBtn.png'

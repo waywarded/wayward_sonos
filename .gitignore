@@ -33,3 +33,5 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+# dev screenshots
+logs/screen.png

@@ -9,6 +9,7 @@ from wp_autosplit_text import WpAutoSplitText
 from wp_app_state import WpAppState
 from wp_display_button import WPDisplayButton
 from wp_fav_content_display import WpFavContentDisplay
+from wp_volume_dial import WpVolumeDial
 from wp_soco import NowPlayingInfo
 
 from enum import Enum
@@ -16,6 +17,7 @@ from enum import Enum
 class WpDisplayState(Enum):
     INFO="Info"
     FAVORITES="Favorites"
+    VOLUME="Volume"
     QUIT_CONFIRM="QuitConfirm"
     QUITTING="Quitting"
 
@@ -119,7 +121,7 @@ class WPDisplay:
             hitPadding=hitPadding
         )
 
-        # drawn but does nothing until the volume control exists
+        # press and hold for the volume dial
         self.volumeButton = WPDisplayButton(
             config.getSubkey('layout', 'volume_button_pos', [450, 640]),
             config.getSubkey('layout', 'volume_button_size', [45, 45]),
@@ -142,6 +144,7 @@ class WPDisplay:
         )
 
         self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)
+        self.volumeDial = WpVolumeDial(config, appStatus, self)
 
         # favorites slides up over now playing: 0 = hidden, 1 = fully open
         self.favsSlide = 0.0
@@ -454,6 +457,10 @@ class WPDisplay:
             self.renderInfo(deltaTime)
         elif self.displayState == WpDisplayState.FAVORITES:
             self.renderFavorites(deltaTime)
+        elif self.displayState == WpDisplayState.VOLUME:
+            self.renderInfo(deltaTime)
+            self.volumeDial.update(deltaTime)
+            self.volumeDial.render(self.screen)
         elif self.displayState == WpDisplayState.QUIT_CONFIRM:
             self.renderQuitConfirm(deltaTime)
 
@@ -493,7 +500,9 @@ class WPDisplay:
             self.openFavorites()
             return True
         if self.volumeButton and self.volumeButton.check_tap(event_pos):
-            return True  # disabled for now; swallow the tap so it doesn't open quit confirm
+            self.displayState = WpDisplayState.VOLUME
+            self.volumeDial.begin(event_pos)
+            return True
 
         if (self.pauseButton and self.pauseButton.check_tap(event_pos)) or (self.playButton and self.playButton.check_tap(event_pos)):
             print("pause button pressed")
@@ -522,6 +531,9 @@ class WPDisplay:
             self.handleTapInfo(position)
         elif self.displayState == WpDisplayState.FAVORITES:
             self.handleTapFavorites(position)
+        elif self.displayState == WpDisplayState.VOLUME:
+            # the release went missing (e.g. dropped touch event); a new touch closes the dial
+            self.displayState = WpDisplayState.INFO
             
     def handleTapInfo(self, position):
         if self.checkButtonTap(position):
@@ -531,6 +543,12 @@ class WPDisplay:
 
     def handleRelease(self, position):
         self.quitHoldElapsed = None
+        if self.displayState == WpDisplayState.VOLUME:
+            self.displayState = WpDisplayState.INFO
+
+    def handleMotion(self, position):
+        if self.displayState == WpDisplayState.VOLUME:
+            self.volumeDial.motion(position)
 
     def handleTapFavorites(self, position):
         # button rects are in panel coordinates, which only match the screen once fully open
@@ -577,6 +595,9 @@ class WPDisplay:
 
                 elif event.type == pygame.MOUSEBUTTONUP:
                     self.handleRelease(event.pos)
+
+                elif event.type == pygame.MOUSEMOTION:
+                    self.handleMotion(event.pos)
                 
             
             if self.displayState == WpDisplayState.QUITTING:

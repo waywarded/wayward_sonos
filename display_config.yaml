@@ -71,6 +71,16 @@ layout:
   quit_hold_area: [200, 10, 320, 85]
   quit_hold_time: 1.5
 
+  # volume dial (while the volume button is held): turning volume_dial_degrees covers 0 to 100
+  volume_dial_degrees: 270
+  volume_dial_dead_zone: 60
+  volume_dial_radius: 320
+  volume_dial_width: 28
+  volume_dial_font_size: 120
+  volume_dial_font_asset: 'assets/PublicSans-Bold.ttf'
+  volume_dial_label_font_size: 22
+  volume_dial_label_font_asset: 'assets/PublicSans-Medium.ttf'
+
   next_button_pos: [650, 320]
   prev_button_pos: [50, 320]
   next_button_asset: "assets/NextTrackBtn.png"
@@ -87,7 +97,7 @@ layout:
   favs_button_size: [30, 30]
   favs_button_asset: "assets/FavsBtn.png"
 
-  # disabled until the volume control exists
+  # press and hold for the volume dial
   volume_button_pos: [450, 645]
   volume_button_size: [30, 30]
   volume_button_asset: "assets/VolBtn.png"

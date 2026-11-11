@@ -1,8 +1,6 @@
 import threading
 import time
 import logging
-import requests
-from io import BytesIO
 
 import StreamDeck
 from StreamDeck.DeviceManager import DeviceManager
@@ -114,28 +112,13 @@ class WPStreamDeckUI:
         if self.status is None:
             return
 
+        # snapshot: the Sonos thread may swap in a new dict while we loop
+        favs = self.status.sonosFavs
         buttonId = 5
-        for fav in self.status.sonosFavs.keys():
-            # img = self._get_image_from_fav(self.status.sonosFavs[fav])
-            # TODO: cache images using the above so we don't fetch them every single time.
-            img = None
-            self._setupButtonWithLabel(buttonId, img, fav, 'play_fav', {'fav' : self.status.sonosFavs[fav]}, False)
+        for fav in favs.keys():
+            img = self.status.favArt.getImage(favs[fav])
+            self._setupButtonWithLabel(buttonId, img, fav, 'play_fav', {'fav' : favs[fav]}, False)
             buttonId += 1
-
-    
-
-    def _get_image_from_fav(self, fav):
-        url = getattr(fav, 'album_art_uri', None)
-        if not url:
-            return None
-        try:
-            response = requests.get(url, timeout=3)
-            response.raise_for_status()
-            img = Image.open(BytesIO(response.content)).convert('RGB')
-            return img
-        except Exception as e:
-            logging.warning(f"Failed to fetch art for {fav.title}: {e}")
-            return None        
 
     def _updateTransportButtons(self):
         if self.deckDevice is None:

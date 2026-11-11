@@ -18,7 +18,9 @@ One step at a time, each tested before the next.
 4a. **Favorites refresh.** Read the favorites list from Sonos on connect, when the refresh button is tapped, and on a slow background timer (`connection.favs_refresh_time`, default 600s), since the app runs for days or months and favorites get edited on the phone. Stop re-reading favorites on every playback event. The refresh button sits right of the "Favorites" heading (about `[425, 45]`, 30px; `favs_refresh_button_*` config, `assets/RefreshBtn.png` from Ed). The tap only sets a flag; the Sonos thread does the fetch so the display never waits on the network. The Stream Deck picks up whatever the latest list is.
    Test: refresh button sets the flag and the list updates; timer refresh fires; no favorites fetch on playback events.
 4b. **Favorite art.** Move `WPStreamDeckUI._get_image_from_fav` (Ed's fetch code) somewhere shared and use it from both the deck and the screen: one fetch path, not a second copy. Cache images by art link, so unchanged favorites never download again and art for removed favorites is dropped (keeps memory flat over weeks). Add the speaker address to relative `/getaa?...` links, fetch off the display thread, and turn the deck call back on. Playing a favorite already goes through the same `content`/`play_fav` handler from both.
-   Test: art on tiles and keys; refresh with no changes downloads nothing; a changed favorite downloads only its art.
+   Test: art on tiles and keys; refresh with no changes downloads nothing; a changed favorite downloads only its art. Done (`wp_fav_art.WPFavArtCache` on `WPAppStatus.favArt`; real Kitchen favorites incl. a `/getaa` one all load).
+   Screen tiles: art (120px) with the name underneath; until art arrives, the first two letters on a solid tile (`favs_tile_size`, `favs_label_*`, `favs_initials_*`).
+   Stream Deck keys still draw the name over the art, which is hard to read on light art (e.g. See-Through); consider a dark band or stronger shadow in `renderButtonLabel`.
 5. Later: a more circular favorites layout.
 6. Later: make the volume button work: open a volume control, maybe a drag control.
 

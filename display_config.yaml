@@ -93,6 +93,9 @@ layout:
   favs_refresh_button_pos: [425, 45]
   favs_refresh_button_size: [30, 30]
   favs_refresh_button_asset: "assets/RefreshBtn.png"
+  favs_tile_size: 120
+  favs_label_font_size: 16
+  favs_label_font_asset: 'assets/PublicSans-Medium.ttf'
 
 
 deck:

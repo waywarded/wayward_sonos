@@ -1,6 +1,7 @@
 import logging
 from enum import Enum
 from wp_app_state import WpAppState
+from wp_fav_art import WPFavArtCache
 
 
 class WPAppStatus:
@@ -14,6 +15,7 @@ class WPAppStatus:
         self.sonosFavs = {}
         self.favsRefreshRequested = False
         self.favsFetching = False
+        self.favArt = WPFavArtCache()
 
     def updateStatus(self, newStatus):
         self.status = newStatus

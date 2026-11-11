@@ -212,7 +212,10 @@ class WPSoco:
                 print(f"ref: {fav.reference}")
                 print(f"resources: {fav.resources}")
                 newFavs[fav.title] = fav
+        # titles show right away; art fills in once downloaded
         self.status.setFavs(newFavs)
+        if self.fakeFavCount is None:
+            self.status.favArt.update(newFavs, self.mainCoordinator().music_library.build_album_art_full_uri)
 
     # favorites get edited from the phone app; refresh on request and on a slow timer
     def checkFavsRefresh(self, favsRefreshTime):

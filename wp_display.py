@@ -125,6 +125,12 @@ class WPDisplay:
             config.getSubkey('layout', 'favs_back_button_asset', 'assets/DownBtn.png')
         )
 
+        self.favsRefreshButton = WPDisplayButton(
+            config.getSubkey('layout', 'favs_refresh_button_pos', [425, 45]),
+            config.getSubkey('layout', 'favs_refresh_button_size', [30, 30]),
+            config.getSubkey('layout', 'favs_refresh_button_asset', 'assets/RefreshBtn.png')
+        )
+
         self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)
 
         # favorites slides up over now playing: 0 = hidden, 1 = fully open
@@ -409,6 +415,9 @@ class WPDisplay:
 
         if self.favsBackButton:
             self.favsBackButton.render(panel)
+        if self.favsRefreshButton:
+            self.favsRefreshButton.setEnabled(not self.wpStatus.favsRefreshPending())
+            self.favsRefreshButton.render(panel)
 
         # ease out: fast start, gentle stop
         eased = 1 - (1 - self.favsSlide) ** 3
@@ -500,6 +509,8 @@ class WPDisplay:
 
         if self.favsBackButton and self.favsBackButton.check_tap(position):
             self.closeFavorites()
+        elif self.favsRefreshButton and self.favsRefreshButton.check_tap(position):
+            self.wpStatus.requestFavsRefresh()
         elif self.favContentDisplay.checkPageTap(position):
             pass
         elif self.favContentDisplay.checkTileTap(position):

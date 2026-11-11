@@ -12,6 +12,8 @@ class WPAppStatus:
         self.latestTrackInfo = None
         self.buttonEventListeners : dict = {}
         self.sonosFavs = {}
+        self.favsRefreshRequested = False
+        self.favsFetching = False
 
     def updateStatus(self, newStatus):
         self.status = newStatus
@@ -50,4 +52,11 @@ class WPAppStatus:
     # swap in a whole new dict: other threads iterate sonosFavs, so never mutate it in place
     def setFavs(self, newFavs : dict):
         self.sonosFavs = newFavs
+
+    # the display can't wait on the network, so it asks and the Sonos thread does the fetch
+    def requestFavsRefresh(self):
+        self.favsRefreshRequested = True
+
+    def favsRefreshPending(self):
+        return self.favsRefreshRequested or self.favsFetching
     

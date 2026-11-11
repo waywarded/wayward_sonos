@@ -90,6 +90,9 @@ layout:
   favs_back_button_pos: [340, 640]
   favs_back_button_size: [40,40]
   favs_back_button_asset: "assets/DownBtn.png"
+  favs_refresh_button_pos: [425, 45]
+  favs_refresh_button_size: [30, 30]
+  favs_refresh_button_asset: "assets/RefreshBtn.png"
 
 
 deck:

@@ -47,6 +47,7 @@ class WPSoco:
     def __init__(self, config, appStatus, fakeFavCount=None):
         self.config = config
         self.fakeFavCount = fakeFavCount
+        self.lastFavsFetchTime = 0
         self.status : WPAppStatus = appStatus
         self.mainDevice = None
         self.mainHouseholdDevices = []
@@ -183,13 +184,22 @@ class WPSoco:
                                              lineIn,
                                              transportState,
                                              deviceString=deviceStr))
-            self.fetchFavs()
             return True
         except Exception as e:
             self.status.log(f"Error fetching state: {e}", logging.ERROR)
             return False
 
     def fetchFavs(self):
+        self.lastFavsFetchTime = time.time()
+        # set fetching before clearing the request so the refresh button never flickers back on mid-fetch
+        self.status.favsFetching = True
+        self.status.favsRefreshRequested = False
+        try:
+            self._fetchFavs()
+        finally:
+            self.status.favsFetching = False
+
+    def _fetchFavs(self):
         newFavs = {}
         if self.fakeFavCount is not None:
             for i in range(self.fakeFavCount):
@@ -204,6 +214,17 @@ class WPSoco:
                 newFavs[fav.title] = fav
         self.status.setFavs(newFavs)
 
+    # favorites get edited from the phone app; refresh on request and on a slow timer
+    def checkFavsRefresh(self, favsRefreshTime):
+        if self.status.appState != WpAppState.CONNECTED:
+            return
+        if not self.status.favsRefreshRequested and time.time() - self.lastFavsFetchTime < favsRefreshTime:
+            return
+        try:
+            self.fetchFavs()
+        except Exception as e:
+            self.status.log(f"Error fetching favorites: {e}", logging.ERROR)
+
     def fetchInitialState(self):
         if self.mainDevice is None:
             self.status.log(
@@ -214,6 +235,10 @@ class WPSoco:
             return
 
         self.fetchState()
+        try:
+            self.fetchFavs()
+        except Exception as e:
+            self.status.log(f"Error fetching favorites: {e}", logging.ERROR)
         self.status.updateStatus(
             f"Attached to '{self.mainDevice.player_name}'")
 
@@ -272,6 +297,7 @@ class WPSoco:
                                                 "reconnect_time", 10)
         reconnectTimer = 0
         doCheckConnection = False
+        favsRefreshTime = self.config.getSubkey("connection", "favs_refresh_time", 600)
 
         while True:
             doCheckConnection = False
@@ -300,6 +326,8 @@ class WPSoco:
                     doCheckConnection = True
 
             time.sleep(1)
+
+            self.checkFavsRefresh(favsRefreshTime)
 
             # If we think we have a connection, let's ping and make sure it's still there
             if self.status.appState == WpAppState.CONNECTED and doCheckConnection:

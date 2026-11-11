@@ -1,17 +1,31 @@
 # TODO
 
-## Next
-- `wp_fav_content_display.py`: on-screen favorites grid (fits the round display). Fix the import (`WpAppStatus` → `WPAppStatus` from `wp_app_status`).
+## Plan: on-screen favorites
+One step at a time, each tested before the next.
+
+0. **Test aids** (dev only, off by default). `--round` paints everything outside the circle white (`display.round_mask_color`) so the Mac window looks like the Pi. The `S` key (or `kill -USR1 <pid>`) saves a screenshot to `logs/screen.png`. Done.
+   Test: run on the Mac, compare the masked window and screenshot with the Pi.
+1. **Get in and out.** New `WpDisplayState.FAVORITES`. `assets/FavsBtn.png` sits left of play/pause, same y and size (about `[230, 640]`, 45px; `favs_button_pos/size/asset` in `display_config.yaml`). A disabled volume button mirrors it right of play/pause (about `[450, 640]`; `volume_button_*` config, placeholder art `assets/VolUpBtn.png` until there's a speaker icon): drawn, but a tap on it does nothing (and doesn't open quit confirm). Other positions stay as they are. It shows whenever connected, line-in included. The favorites screen is the background plus a back button (`favs_back_button_*` config; placeholder art until there's a real icon).
+   Test: tap in, tap back; a tap elsewhere on now playing still opens quit confirm.
+2. **Grid.** `WpFavContentDisplay` builds a 3x3 page of `WPDisplayButton`s from a snapshot of `sonosFavs`, with left/right page arrows (prev/next track art). Tapping a tile sends the existing `content` / `play_fav` event and returns to now playing. Tiles are plain, numbered squares until step 3. `--fake_favs N` replaces the real favorites with N fake ones (the Stream Deck shows them too).
+   Small changes: `WPDisplayButton` gets an optional command/params like the Stream Deck buttons, so taps dispatch without if-chains. `fetchState` builds the new favorites dict and swaps it in, so the screen never catches it half-built from the other thread.
+   Test: 0 favorites ("No favorites" message), 1, 9, 10, 25; arrows only when there's another page; playing a favorite works.
+3. **Labels.** New `wp_button_label.py` draws a labeled tile as a PIL image (moved from `WPStreamDeckUI._setupButtonWithLabel`). The Stream Deck uses it as-is; `WPDisplayButton` can be built from a PIL image.
+   Test: deck labels look the same as before; screen tiles show names; long names split or truncate.
+4. Later: favorite art with a cache, shared by the deck and the screen.
+5. Later: a more circular favorites layout.
+6. Later: make the volume button work: open a volume control, maybe a drag control.
 
 ## Round display
 The screen is a 720px circle: usable width at height `y` is `2·sqrt(360² − (y−360)²)`.
 - Status line (y 690, width 360) is wider than the circle there (~288px), so long messages get clipped.
 - Track title line 1 (~y 99, width 480) can clip a few pixels per side (circle ~448px wide there).
+- The not-connected status text is drawn at x 20 near the bottom: in the corner, outside the circle.
 - Consider a helper that returns usable width at a given y for new layout elements.
 
 ## Cleanup
+- `display_config.yaml` asks for `assets/VolDownBtn.png` but the file is `assets/volDownBtn.png`. Works on the Mac (case-insensitive), fails on the Pi.
 - Stream Deck loop redraws every favorite key every second; only redraw when favorites change.
 - `fetchState()` re-fetches Sonos favorites on every Sonos event; fetch on connect (and occasionally) instead.
-- Favorite key art: `_get_image_from_fav` is stubbed out; cache images before enabling it.
 - Remove leftover `print()` debugging (e.g. `mainCoordinator()` prints "get coordinator" on every call; transport info, fav dumps).
 - `handleTransportEvent` has a dead `play_fav` case (favorites go through the `content` event).

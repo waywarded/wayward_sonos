@@ -18,12 +18,15 @@ class WpDisplayState(Enum):
     QUITTING="Quitting"
 
 class WPDisplay:
-    def __init__(self, config, appStatus, fullScreen=False):
+    def __init__(self, config, appStatus, fullScreen=False, roundMask=False):
         self.wpStatus = appStatus
         self.config = config
         self.screenSize = config.getSubkey('display', 'screen_size', 720)
         self.bgImagePath = config.getSubkey('display', 'background_image', 'assets/background.png')
         self.displayState = WpDisplayState.INFO
+        self.roundMask = roundMask
+        self.roundMaskSurface = None
+        self.screenshotRequested = False
 
         displayFlags = 0
         if (fullScreen):
@@ -329,7 +332,35 @@ class WPDisplay:
         elif self.displayState == WpDisplayState.QUIT_CONFIRM:
             self.renderQuitConfirm(deltaTime)
 
+        if self.roundMask:
+            self.renderRoundMask()
+
         pygame.display.flip()  # Update the display
+
+        if self.screenshotRequested:
+            self.screenshotRequested = False
+            self.saveScreenshot()
+
+    # dev aid: paint over everything outside the circle so a desktop window looks like the round Pi display
+    def renderRoundMask(self):
+        if self.roundMaskSurface is None:
+            self.roundMaskSurface = pygame.Surface((self.screenSize, self.screenSize), pygame.SRCALPHA)
+            maskColor = self.config.getSubkey('display', 'round_mask_color', [255, 255, 255])
+            self.roundMaskSurface.fill((*maskColor, 255))
+            # draw functions write pixels without blending, so this punches a transparent hole
+            pygame.draw.circle(self.roundMaskSurface, (0, 0, 0, 0), (self.screenSize//2, self.screenSize//2), self.screenSize//2)
+        self.screen.blit(self.roundMaskSurface, (0, 0))
+
+    def requestScreenshot(self):
+        self.screenshotRequested = True
+
+    def saveScreenshot(self):
+        path = 'logs/screen.png'
+        try:
+            pygame.image.save(self.screen, path)
+            self.wpStatus.log(f"Saved screenshot to {path}", logging.INFO)
+        except Exception as e:
+            self.wpStatus.log(f"Failed to save screenshot: {e}", logging.ERROR)
 
 
     def checkButtonTap(self, event_pos):
@@ -387,6 +418,8 @@ class WPDisplay:
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
                         self.running = False
+                    elif event.key == pygame.K_s:
+                        self.requestScreenshot()
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.handleTap(event.pos)

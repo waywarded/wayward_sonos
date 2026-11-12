@@ -9,6 +9,8 @@ import logging
 import argparse
 import os
 import signal
+import sys
+import fcntl
 
 from soco.discovery import scan_network
 
@@ -22,8 +24,23 @@ logging.basicConfig(
     ]
 )
 
+# two copies would fight over the screen and the speakers, so only one may run however it's started.
+# the OS drops the lock when the process dies, so a crash never leaves it stuck.
+ALREADY_RUNNING_EXIT_CODE = 3
+appLock = None
+
+def lockSingleInstance():
+    global appLock
+    appLock = open('logs/app.lock', 'w')
+    try:
+        fcntl.flock(appLock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        logging.error("Another copy of the app is already running.")
+        sys.exit(ALREADY_RUNNING_EXIT_CODE)
+
 def main():
     logging.basicConfig(level=logging.INFO)
+    lockSingleInstance()
     wpStatus = WPAppStatus()
 
     # parse args

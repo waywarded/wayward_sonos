@@ -37,6 +37,7 @@ One step at a time, each tested before the next.
 9. **Line-in favorite.** Always the first favorite, on the screen grid and the Stream Deck, when the room config names the speaker with the line-in (`line_in_device`, e.g. "Front Room"). Uses the existing `line_in_track_image` art and `line_in_track_name` label. Picking it sends the same `content`/`play_fav` event; `handleContentEvent` switches the main group's coordinator to that speaker's line-in (`switch_to_line_in(source=...)`).
    Test: present with 0 favorites and with several; absent when `line_in_device` isn't set; plays the record player on Front Room.
 10. Later: a UI for switching which device/group the display controls.
+11. Later: start at boot with a systemd service that runs `launcher.py run` (the launcher already handles one copy, display and restarts).
 
 ## Round display
 The screen is a 720px circle: usable width at height `y` is `2·sqrt(360² − (y−360)²)`.
@@ -51,4 +52,6 @@ The screen is a 720px circle: usable width at height `y` is `2·sqrt(360² − (
 - `display_config.yaml` asks for `assets/VolDownBtn.png` but the file is `assets/volDownBtn.png`. Works on the Mac (case-insensitive), fails on the Pi.
 - Stream Deck loop redraws every favorite key every second; only redraw when favorites change.
 - Remove leftover `print()` debugging (e.g. `mainCoordinator()` prints "get coordinator" on every call; transport info, fav dumps).
+- `logs/run.log` and `logs/app.log` grow forever (and run.log repeats app.log); rotate or cap them for weeks-long runs.
+- `runme*.sh` scripts are superseded by `launcher.py`; remove once the launcher has proven itself on the Pi.
 - `handleTransportEvent` has a dead `play_fav` case (favorites go through the `content` event).

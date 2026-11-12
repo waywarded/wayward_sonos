@@ -35,3 +35,5 @@ Thumbs.db
 .idea/
 # dev screenshots
 logs/screen.png
+# single-instance locks
+logs/*.lock

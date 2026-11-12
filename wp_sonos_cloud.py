@@ -13,7 +13,10 @@ CONTROL_URL = 'https://api.ws.sonos.com/control/api/v1'
 
 
 class SonosCloudError(Exception):
-    pass
+    def __init__(self, message, timedOut=False):
+        super().__init__(message)
+        # 504: the cloud stopped waiting for the speaker, which may still finish the command
+        self.timedOut = timedOut
 
 
 # Loads favorites through the Sonos cloud API. The speakers can't load some favorites themselves
@@ -68,7 +71,8 @@ class WPSonosCloud:
                 headers={'Authorization': 'Bearer ' + self.tokens['access_token']},
                 json=body, timeout=self.timeout)
         if not response.ok:
-            raise SonosCloudError(f"Sonos cloud {method} {path} failed ({response.status_code}): {response.text[:200]}")
+            raise SonosCloudError(f"Sonos cloud {method} {path} failed ({response.status_code}): {response.text[:200]}",
+                                  timedOut=response.status_code == 504)
         return response.json() if response.content else {}
 
     # favItemId is soco's 'FV:2/19' or plain '19'

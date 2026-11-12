@@ -2,7 +2,7 @@ import soco
 import logging
 from wp_app_status import WPAppStatus, WpAppState
 from wp_config import WPConfig
-from wp_sonos_cloud import WPSonosCloud
+from wp_sonos_cloud import WPSonosCloud, SonosCloudError
 import threading
 from dataclasses import dataclass
 import time
@@ -81,6 +81,7 @@ class WPSoco:
         self.commands = queue.Queue()   # (run, kwargs) from taps, for commandThread
         self.addToQueueTimeout = config.getSubkey('connection', 'add_to_queue_timeout', 90)
         self.cloud = None
+        self.cloudStartWait = config.getSubkey('connection', 'cloud_start_wait', 60)
         if config.getSubkey('favorites', 'load_via', 'local') == 'cloud':
             cloud = WPSonosCloud(timeout=config.getSubkey('connection', 'cloud_timeout', 30))
             if cloud.ready():
@@ -511,9 +512,18 @@ class WPSoco:
                             if self.cloud and getattr(fav, 'item_id', None):
                                 # one call; the speaker builds the queue itself, like the Sonos app
                                 started = time.monotonic()
+                                before = self.status.latestTrackInfo
                                 groupId = self.timedCall('group lookup', lambda: self.mainDevice.group.uid)
-                                self.timedCall('cloud loadFavorite', lambda: self.waitCancellable('cloud loadFavorite',
-                                    lambda: self.cloud.loadFavorite(groupId, fav.item_id)))
+                                try:
+                                    self.timedCall('cloud loadFavorite', lambda: self.waitCancellable('cloud loadFavorite',
+                                        lambda: self.cloud.loadFavorite(groupId, fav.item_id)))
+                                except SonosCloudError as e:
+                                    # the cloud gives up after ~10s while the speaker keeps loading and starts later
+                                    if not e.timedOut:
+                                        raise
+                                    self.status.log(f"Sonos cloud timed out; waiting up to {self.cloudStartWait}s for {fav.title} to start")
+                                    if not self.timedCall('wait for start', lambda: self.waitForStart(before, self.cloudStartWait)):
+                                        raise
                                 time.sleep(.5)
                                 self.timedCall('fetchState', self.fetchState)
                                 self.logTiming(f'play_fav {fav.title} (cloud) total', started)
@@ -539,6 +549,23 @@ class WPSoco:
                 fav = (kwargs.get('params') or {}).get('fav')
                 self.status.commandFailed(f"Couldn't play {fav.title if fav else 'favorite'}")
 
+
+    # true once the speaker reports playing something new since `before` (the track info when the tap was handled).
+    # track info comes from the event thread; a new title, or playing again after a stop, counts as started.
+    def waitForStart(self, before, limit):
+        sawStop = before is None or not before.isPlaying()
+        end = time.monotonic() + limit
+        while time.monotonic() < end:
+            if self.status.cancelRequested.is_set():
+                raise CommandCancelled()
+            info = self.status.latestTrackInfo
+            if info is not None and info is not before:
+                if not info.isPlaying():
+                    sawStop = True
+                elif sawStop or before is None or info.title != before.title:
+                    return True
+            time.sleep(0.2)
+        return False
 
     # a blocked request can't be interrupted, so it runs on a throwaway thread while this one watches for Cancel.
     # after a cancel the request finishes (or fails) on its own and its result is ignored.

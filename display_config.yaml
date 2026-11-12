@@ -128,6 +128,10 @@ deck:
   vol_up_button_asset: 'assets/VolUpBtn.png'
   vol_down_button_asset: 'assets/VolDownBtn.png'
 favorites:
+  # how a tapped favorite is started. local: soco clears the queue and adds the favorite (the speaker fetches the
+  # whole playlist first, so long ones can take a while). cloud: one call to the Sonos cloud, like the Sonos app;
+  # needs internet and a one-time `uv run sonos_auth.py`. Falls back to local if that sign-in is missing.
+  load_via: cloud
   # each favorite tile gets a badge for its music service, keyed by the service id in the favorite's link
   # (204 = Apple Music, 12 = Spotify, 157 = Bandcamp; the log lists them at startup).
   # icon: a PNG to show; if the file is missing, a round badge with `short` (or the name's initials) is drawn.

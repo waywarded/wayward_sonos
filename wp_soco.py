@@ -2,6 +2,7 @@ import soco
 import logging
 from wp_app_status import WPAppStatus, WpAppState
 from wp_config import WPConfig
+from wp_sonos_cloud import WPSonosCloud
 import threading
 from dataclasses import dataclass
 import time
@@ -79,6 +80,13 @@ class WPSoco:
         self.sub = None
         self.commands = queue.Queue()   # (run, kwargs) from taps, for commandThread
         self.addToQueueTimeout = config.getSubkey('connection', 'add_to_queue_timeout', 90)
+        self.cloud = None
+        if config.getSubkey('favorites', 'load_via', 'local') == 'cloud':
+            cloud = WPSonosCloud(timeout=config.getSubkey('connection', 'cloud_timeout', 30))
+            if cloud.ready():
+                self.cloud = cloud
+            else:
+                self.status.log("favorites.load_via is cloud but there's no Sonos sign-in (run sonos_auth.py); loading favorites locally", logging.WARNING)
         self.status.subscribeToButtonEvent('transport', self.handleTransportEvent)
         self.status.subscribeToButtonEvent('content', self.handleContentEvent)
 
@@ -500,7 +508,16 @@ class WPSoco:
                             fav = params['fav']
 
                             print(fav.__dict__)
-                            if fav.reference:
+                            if self.cloud and getattr(fav, 'item_id', None):
+                                # one call; the speaker builds the queue itself, like the Sonos app
+                                started = time.monotonic()
+                                groupId = self.timedCall('group lookup', lambda: self.mainDevice.group.uid)
+                                self.timedCall('cloud loadFavorite', lambda: self.waitCancellable('cloud loadFavorite',
+                                    lambda: self.cloud.loadFavorite(groupId, fav.item_id)))
+                                time.sleep(.5)
+                                self.timedCall('fetchState', self.fetchState)
+                                self.logTiming(f'play_fav {fav.title} (cloud) total', started)
+                            elif fav.reference:
                                 print('fav_ref:')
                                 print(fav.reference.__dict__)
                                 started = time.monotonic()

@@ -37,3 +37,5 @@ Thumbs.db
 logs/screen.png
 # single-instance locks
 logs/*.lock
+# Sonos cloud sign-in tokens
+sonos_tokens.json

@@ -78,5 +78,6 @@ class WPSonosCloud:
     # favItemId is soco's 'FV:2/19' or plain '19'
     def loadFavorite(self, groupId, favItemId, play=True):
         favoriteId = favItemId.split('/')[-1]
+        # without REPLACE the favorite's tracks were appended to the old queue, so shuffle played other tracks
         self.request('POST', f'/groups/{groupId}/favorites',
-                     {'favoriteId': favoriteId, 'playOnCompletion': play})
+                     {'favoriteId': favoriteId, 'playOnCompletion': play, 'action': 'REPLACE'})

@@ -1,8 +1,10 @@
 import pygame
 import math
+import os
 from wp_app_status import WPAppStatus
 from wp_display_button import WPDisplayButton
 from wp_button_label import renderButtonLabel
+from wp_soco import favServiceId, isLibraryFav
 
 class WpFavContentDisplay:
     def __init__(self, config, wpStatus, parent):
@@ -21,6 +23,14 @@ class WpFavContentDisplay:
         self.labelHeight = config.getSubkey('layout', 'favs_label_height', 24)
         self.labelFont = parent.getFontForElement('favs_label')
         self.labelColor = config.getSubkey('layout', 'favs_label_color', [255, 255, 255])
+        self.services = config.getSubkey('favorites', 'services', {})
+        self.libraryIcon = config.getSubkey('favorites', 'library_icon', None)
+        self.sonosPlaylistIcon = config.getSubkey('favorites', 'sonos_playlist_icon', None)
+        self.unknownServiceIcon = config.getSubkey('favorites', 'unknown_service_icon', None)
+        self.badgeSize = config.getSubkey('layout', 'favs_service_badge_size', 30)
+        self.badgeColor = config.getSubkey('layout', 'favs_service_badge_color', [20, 20, 20])
+        self.badgeFont = parent.getFontForElement('favs_service_badge')
+        self.badges = {}        # badge key (service id, 'library' or None) -> surface or None, made once
 
         hitPadding = config.getSubkey('layout', 'button_hit_padding', 20)
         self.prevPageButton = WPDisplayButton(
@@ -54,9 +64,29 @@ class WpFavContentDisplay:
             return
         self.favs = self.wpStatus.sonosFavs
         self.artVersion = self.wpStatus.favArt.version
-        self.favList = list(self.favs.items())
+        self.favList = self.sortByService(list(self.favs.items()))
         self.page = min(self.page, self.pageCount() - 1)
         self.setupDisplay()
+
+    # what a favorite plays from: a service id, 'library' (SMB share) or None (saved Sonos playlists)
+    def badgeKey(self, fav):
+        serviceId = favServiceId(fav)
+        if serviceId is not None:
+            return serviceId
+        return 'library' if isLibraryFav(fav) else None
+
+    # services grouped by name, then the music library, then saved Sonos playlists; Sonos order within a group
+    def sortByService(self, favList):
+        names = self.wpStatus.serviceNames
+        def key(indexed):
+            index, (title, fav) = indexed
+            source = self.badgeKey(fav)
+            if source is None:
+                return (2, '', index)
+            if source == 'library':
+                return (1, '', index)
+            return (0, names.get(source, f'service {source}'), index)
+        return [item for index, item in sorted(enumerate(favList), key=key)]
 
     # build a grid of wp_display_buttons for the current page
     def setupDisplay(self):
@@ -74,7 +104,9 @@ class WpFavContentDisplay:
             col = i % self.columns
             row = i // self.columns
             pos = [left + col * (self.tileSize + self.tileGap), top + row * (tileHeight + self.tileGap)]
-            button = WPDisplayButton(pos, [self.tileSize, tileHeight], self.makeTileSurface(title, self.wpStatus.favArt.getImage(fav)))
+            surface = self.makeTileSurface(title, self.wpStatus.favArt.getImage(fav))
+            self.drawServiceBadge(surface, self.badgeKey(fav))
+            button = WPDisplayButton(pos, [self.tileSize, tileHeight], surface)
             self.tiles.append((button, fav))
 
         self.prevPageButton.setVisible(self.page > 0)
@@ -94,6 +126,44 @@ class WpFavContentDisplay:
         text = self.labelFont.render(self.fitLabel(title), True, self.labelColor)
         surf.blit(text, text.get_rect(center=(self.tileSize//2, self.tileSize + self.labelHeight//2)))
         return surf
+
+    # bottom-right corner of the art square
+    def drawServiceBadge(self, surface, key):
+        badge = self.serviceBadge(key)
+        if badge is not None:
+            surface.blit(badge, badge.get_rect(bottomright=(self.tileSize - 4, self.tileSize - 4)))
+
+    # key: a service id, 'library' or None (see badgeKey). A service gets its icon PNG if the file exists, else a
+    # round badge with its short name; services without settings get the unknown icon. The library and saved
+    # Sonos playlists get their icons if there are any.
+    def serviceBadge(self, key):
+        if key not in self.badges:
+            self.badges[key] = self.makeBadge(key)
+        return self.badges[key]
+
+    def makeBadge(self, key):
+        if key is None:
+            return self.loadIcon(self.sonosPlaylistIcon)
+        if key == 'library':
+            return self.loadIcon(self.libraryIcon)
+        settings = self.services.get(key, {})
+        icon = self.loadIcon(settings.get('icon') if settings else self.unknownServiceIcon)
+        if icon is not None:
+            return icon
+        name = self.wpStatus.serviceNames.get(key, '')
+        short = settings.get('short') or ''.join(word[0] for word in name.split()[:2]).upper() or '?'
+        badge = pygame.Surface((self.badgeSize, self.badgeSize), pygame.SRCALPHA)
+        radius = self.badgeSize // 2
+        pygame.draw.circle(badge, self.badgeColor, (radius, radius), radius)
+        pygame.draw.circle(badge, (255, 255, 255), (radius, radius), radius, width=1)
+        text = self.badgeFont.render(short, True, (255, 255, 255))
+        badge.blit(text, text.get_rect(center=(radius, radius)))
+        return badge
+
+    def loadIcon(self, path):
+        if not path or not os.path.exists(path):
+            return None
+        return pygame.transform.smoothscale(pygame.image.load(path).convert_alpha(), (self.badgeSize, self.badgeSize))
 
     # first two letters or digits, so "µ-Ziq Radio" gives "µZ"
     def initials(self, title):

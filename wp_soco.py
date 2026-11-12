@@ -57,6 +57,15 @@ def favServiceId(fav):
     return int(match.group(1)) if match else None
 
 
+# favorites from the music library on a network (SMB) share: its files (x-file-cifs://server/share/...) and its
+# albums and imported playlists (x-rincon-playlist:RINCON_...#A:... or #S://server/share/list.m3u)
+def isLibraryFav(fav):
+    try:
+        return fav.get_uri().startswith(('x-file-cifs:', 'x-rincon-playlist:'))
+    except Exception:
+        return False
+
+
 class WPSoco:
 
     def __init__(self, config, appStatus, fakeFavCount=None):
@@ -224,19 +233,35 @@ class WPSoco:
                 newFavs[title] = FakeFav(title)
         else:
             sonos_favs = self.mainCoordinator().music_library.get_sonos_favorites()
-            hiddenServices = self.config.getSubkey('favorites', 'hide_service_ids', [])
             for fav in sonos_favs:
                 print(f"title: {fav.title}")
                 print(f"ref: {fav.reference}")
                 print(f"resources: {fav.resources}")
-                if favServiceId(fav) in hiddenServices:
-                    self.status.logSilent(f"Hiding favorite '{fav.title}' (service {favServiceId(fav)})")
-                    continue
                 newFavs[fav.title] = fav
+            # before setFavs, so the grid can sort and badge by service as soon as the favorites arrive
+            if not self.status.serviceNames:
+                self.status.serviceNames = self.fetchServiceNames()
+            for title, fav in newFavs.items():
+                sid = favServiceId(fav)
+                self.status.logSilent(f"Favorite '{title}': service {sid} {self.status.serviceNames.get(sid, '')}")
         # titles show right away; art fills in once downloaded
         self.status.setFavs(newFavs)
         if self.fakeFavCount is None:
             self.status.favArt.update(newFavs, self.mainCoordinator().music_library.build_album_art_full_uri)
+
+    # {service id: name} for every music service the speakers know, e.g. {204: 'Apple Music', 12: 'Spotify'}
+    def fetchServiceNames(self):
+        try:
+            xml = self.mainCoordinator().musicServices.ListAvailableServices()['AvailableServiceDescriptorList']
+        except Exception as e:
+            self.status.log(f"Error fetching music service names: {e}", logging.ERROR)
+            return {}
+        names = {}
+        for tag in re.finditer(r'<Service\s([^>]*)>', xml):
+            attrs = dict(re.findall(r'(\w+)="([^"]*)"', tag.group(1)))
+            if attrs.get('Id', '').isdigit() and 'Name' in attrs:
+                names[int(attrs['Id'])] = attrs['Name']
+        return names
 
     # favorites get edited from the phone app; refresh on request and on a slow timer
     def checkFavsRefresh(self, favsRefreshTime):

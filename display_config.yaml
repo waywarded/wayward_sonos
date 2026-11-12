@@ -113,6 +113,11 @@ layout:
   favs_tile_size: 120
   favs_label_font_size: 16
   favs_label_font_asset: 'assets/PublicSans-Medium.ttf'
+  # music service badge in the corner of each favorite's art (icons and short names under favorites.services)
+  favs_service_badge_size: 30
+  favs_service_badge_color: [20, 20, 20]
+  favs_service_badge_font_size: 12
+  favs_service_badge_font_asset: 'assets/PublicSans-Bold.ttf'
 
 
 deck:
@@ -123,7 +128,17 @@ deck:
   vol_up_button_asset: 'assets/VolUpBtn.png'
   vol_down_button_asset: 'assets/VolDownBtn.png'
 favorites:
-  # favorites from these music services are left out of the screen and the Stream Deck.
-  # 204 = Apple Music: Sonos speakers load Apple Music playlists unreliably when asked directly (they can take
-  # 20s and fail), though the Sonos app plays them fine. 12 = Spotify.
-  hide_service_ids: [204]
+  # each favorite tile gets a badge for its music service, keyed by the service id in the favorite's link
+  # (204 = Apple Music, 12 = Spotify, 157 = Bandcamp; the log lists them at startup).
+  # icon: a PNG to show; if the file is missing, a round badge with `short` (or the name's initials) is drawn.
+  # Apple Music playlists load unreliably on the speakers (can take 20s and fail); the Sonos app plays them fine.
+  services:
+    204: {short: 'AM', icon: 'assets/AppleMusic.png'}
+    12: {short: 'SP', icon: 'assets/Spotify.png'}
+    157: {short: 'BC', icon: 'assets/BandCamp.png'}
+    160: {short: 'SC', icon: 'assets/SoundCloud.png'}
+    303: {short: 'SR', icon: 'assets/Sonos.png'}    # Sonos Radio
+  # favorites from the music library on a network (SMB) share, saved Sonos playlists, and services not listed above
+  library_icon: 'assets/Network.png'
+  sonos_playlist_icon: 'assets/Sonos.png'
+  unknown_service_icon: 'assets/UnknownService.png'

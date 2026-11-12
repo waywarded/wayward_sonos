@@ -388,21 +388,24 @@ class WPSoco:
         try:
             if self.status.appState == WpAppState.CONNECTED and not (self.sub is None) and not (self.mainDevice is None):
                 control = kwargs.get('control','')
+                started = time.monotonic()
+                coordinator = self.timedCall('coordinator lookup', self.mainCoordinator)
                 match control:
                     case 'play':
-                        self.mainCoordinator().play()
+                        self.timedCall('play', coordinator.play)
                     case 'pause':
-                        self.mainCoordinator().pause()
+                        self.timedCall('pause', coordinator.pause)
                     case 'next':
-                        self.mainCoordinator().next()
+                        self.timedCall('next', coordinator.next)
                     case 'prev':
-                        self.mainCoordinator().previous()
+                        self.timedCall('prev', coordinator.previous)
                     case 'vol_up':
-                        self.mainCoordinator().set_relative_volume(10)
+                        self.timedCall('vol_up', lambda: coordinator.set_relative_volume(10))
                     case 'vol_down':
-                        self.mainCoordinator().set_relative_volume(-10)
+                        self.timedCall('vol_down', lambda: coordinator.set_relative_volume(-10))
                     case 'play_fav':
                         print(f'play fav:')
+                self.logTiming(f'{control} total', started)
         except Exception as e:
             self.status.log(f"Exception sending command {e}")
 
@@ -424,14 +427,28 @@ class WPSoco:
                             if fav.reference:
                                 print('fav_ref:')
                                 print(fav.reference.__dict__)
-                                self.mainCoordinator().clear_queue()
-                                self.mainCoordinator().add_to_queue(fav.reference)
-                                self.mainCoordinator().play_from_queue(0)
+                                started = time.monotonic()
+                                coordinator = self.timedCall('coordinator lookup', self.mainCoordinator)
+                                self.timedCall('clear_queue', coordinator.clear_queue)
+                                self.timedCall('add_to_queue', lambda: coordinator.add_to_queue(fav.reference))
+                                self.timedCall('play_from_queue', lambda: coordinator.play_from_queue(0))
                                 time.sleep(.5)
-                                self.fetchState()
+                                self.timedCall('fetchState', self.fetchState)
+                                self.logTiming(f'play_fav {fav.title} total', started)
         except Exception as e:
             self.status.log(f"Exception sending command {e}")
 
+
+    # temporary: finding out which Sonos calls make taps slow on the Pi (grep "Sonos timing" in logs/app.log)
+    def timedCall(self, label, call):
+        started = time.monotonic()
+        try:
+            return call()
+        finally:
+            self.logTiming(label, started)
+
+    def logTiming(self, label, started):
+        self.status.logSilent(f"Sonos timing: {label} took {time.monotonic() - started:.2f}s ({threading.current_thread().name})")
 
     def mainCoordinator(self):
         print("get coordinator")

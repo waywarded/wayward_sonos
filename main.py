@@ -71,8 +71,12 @@ def main():
     wpSoco = WPSoco(wpConfig, wpStatus, fakeFavCount=args.fake_favs)
     wpSoco.start()
 
-    wpStreamdeck = WPStreamDeckUI(wpConfig, wpStatus)
-    wpStreamdeck.start()
+    # off for a display with no Stream Deck: otherwise its thread scans USB for one every few seconds, forever
+    if wpConfig.get('stream_deck', True):
+        wpStreamdeck = WPStreamDeckUI(wpConfig, wpStatus)
+        wpStreamdeck.start()
+    else:
+        wpStatus.logSilent("Stream Deck off (stream_deck: false in config)", logging.INFO)
 
     # run UI loop
     wpDisplay.run()

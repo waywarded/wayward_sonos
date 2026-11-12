@@ -1,3 +1,5 @@
+# no Stream Deck on the Front Room display
+stream_deck: false
 target_devices:
   - name: Kitchen
     required: false

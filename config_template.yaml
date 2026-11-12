@@ -1,3 +1,5 @@
+# set to false on a display with no Stream Deck attached
+stream_deck: true
 target_devices:
   - name: Kitchen
     required: true

@@ -18,6 +18,15 @@ class FakeFav:
     reference: object = None
 
 
+# the line-in tile on the favorites screen (line_in_device in the room config): plays that speaker's line-in
+# on the main group, which needn't be the same speaker
+@dataclass
+class LineInFav:
+    title: str
+    device: str
+    reference: object = None
+
+
 @dataclass
 class NowPlayingInfo:
     title: str = "Unknown Title"
@@ -76,11 +85,13 @@ class WPSoco:
         self.status : WPAppStatus = appStatus
         self.mainDevice = None
         self.mainHouseholdDevices = []
+        self.allDevices = set()         # everything discovery found, for the line-in speaker
         self.coordinator = None
         self.sub = None
         self.commands = queue.Queue()   # (run, kwargs) from taps, for commandThread
         self.addToQueueTimeout = config.getSubkey('connection', 'add_to_queue_timeout', 90)
         self.cloud = None
+        self.groupId = None             # the main device's group, for the cloud; kept current by fetchState
         self.cloudStartWait = config.getSubkey('connection', 'cloud_start_wait', 60)
         if config.getSubkey('favorites', 'load_via', 'local') == 'cloud':
             cloud = WPSonosCloud(timeout=config.getSubkey('connection', 'cloud_timeout', 30))
@@ -107,6 +118,7 @@ class WPSoco:
             return
 
         self.status.logSilent(f"Devices: {[d.player_name for d in devices]}", logging.INFO)
+        self.allDevices = devices
 
         for device in devices:
             if device.player_name == mainDeviceName:
@@ -181,7 +193,9 @@ class WPSoco:
                 logging.ERROR)
             return
 
-        coordinator = self.mainDevice.group.coordinator
+        group = self.mainDevice.group
+        self.groupId = group.uid
+        coordinator = group.coordinator
         lineIn = False
         if coordinator and coordinator.is_playing_line_in:
             lineIn = True
@@ -372,6 +386,7 @@ class WPSoco:
                     if event:
                         self.status.log(f"Received Sonos event: {event}",
                                         logging.INFO)
+                        self.noteShuffle(event)
                         if self.fetchState():
                             doCheckConnection = False
                 except queue.Empty:
@@ -488,6 +503,11 @@ class WPSoco:
                         self.timedCall('vol_up', lambda: coordinator.set_relative_volume(10))
                     case 'vol_down':
                         self.timedCall('vol_down', lambda: coordinator.set_relative_volume(-10))
+                    case 'shuffle':
+                        on = not self.status.shuffle
+                        # soco keeps the repeat setting; radio and line-in refuse it (logged below)
+                        self.timedCall('shuffle', lambda: setattr(coordinator, 'shuffle', on))
+                        self.status.shuffle = on
                     case 'play_fav':
                         print(f'play fav:')
                 self.logTiming(f'{control} total', started)
@@ -509,11 +529,19 @@ class WPSoco:
                             fav = params['fav']
 
                             print(fav.__dict__)
-                            if self.cloud and getattr(fav, 'item_id', None):
+                            if isinstance(fav, LineInFav):
+                                started = time.monotonic()
+                                source = self.timedCall('line-in speaker lookup', lambda: self.lineInSource(fav.device))
+                                coordinator = self.timedCall('coordinator lookup', self.mainCoordinator)
+                                self.timedCall('switch_to_line_in', lambda: coordinator.switch_to_line_in(source=source))
+                                self.timedCall('play', coordinator.play)
+                                self.logTiming(f'play line-in {fav.device} total', started)
+                            elif self.cloud and getattr(fav, 'item_id', None):
                                 # one call; the speaker builds the queue itself, like the Sonos app
                                 started = time.monotonic()
                                 before = self.status.latestTrackInfo
-                                groupId = self.timedCall('group lookup', lambda: self.mainDevice.group.uid)
+                                # remembered by fetchState; looking it up costs a speaker call, which can be slow on the Pi
+                                groupId = self.groupId or self.timedCall('group lookup', lambda: self.mainDevice.group.uid)
                                 try:
                                     self.timedCall('cloud loadFavorite', lambda: self.waitCancellable('cloud loadFavorite',
                                         lambda: self.cloud.loadFavorite(groupId, fav.item_id)))
@@ -524,8 +552,7 @@ class WPSoco:
                                     self.status.log(f"Sonos cloud timed out; waiting up to {self.cloudStartWait}s for {fav.title} to start")
                                     if not self.timedCall('wait for start', lambda: self.waitForStart(before, self.cloudStartWait)):
                                         raise
-                                time.sleep(.5)
-                                self.timedCall('fetchState', self.fetchState)
+                                # no fetchState here: the speaker's events update the screen on the event thread
                                 self.logTiming(f'play_fav {fav.title} (cloud) total', started)
                             elif fav.reference:
                                 print('fav_ref:')
@@ -549,6 +576,22 @@ class WPSoco:
                 fav = (kwargs.get('params') or {}).get('fav')
                 self.status.commandFailed(f"Couldn't play {fav.title if fav else 'favorite'}")
 
+
+    # play mode comes with the transport events (NORMAL, SHUFFLE, SHUFFLE_NOREPEAT, REPEAT_ALL...), so knowing
+    # whether shuffle is on costs no extra speaker call
+    def noteShuffle(self, event):
+        mode = event.variables.get('current_play_mode')
+        if mode:
+            self.status.shuffle = 'SHUFFLE' in mode
+
+    def lineInSource(self, name):
+        for device in self.allDevices:
+            if device.player_name == name:
+                return device
+        device = soco.discovery.by_name(name)
+        if device is None:
+            raise RuntimeError(f"line-in speaker '{name}' not found")
+        return device
 
     # true once the speaker reports playing something new since `before` (the track info when the tap was handled).
     # track info comes from the event thread; a new title, or playing again after a stop, counts as started.

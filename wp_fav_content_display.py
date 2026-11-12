@@ -4,7 +4,8 @@ import os
 from wp_app_status import WPAppStatus
 from wp_display_button import WPDisplayButton
 from wp_button_label import renderButtonLabel
-from wp_soco import favServiceId, isLibraryFav
+from PIL import Image
+from wp_soco import favServiceId, isLibraryFav, LineInFav
 
 class WpFavContentDisplay:
     def __init__(self, config, wpStatus, parent):
@@ -31,6 +32,17 @@ class WpFavContentDisplay:
         self.badgeColor = config.getSubkey('layout', 'favs_service_badge_color', [20, 20, 20])
         self.badgeFont = parent.getFontForElement('favs_service_badge')
         self.badges = {}        # badge key (service id, 'library' or None) -> surface or None, made once
+        self.sortLast = config.getSubkey('favorites', 'sort_last', [])
+
+        # first tile, when the room config names the speaker whose line-in to play
+        self.lineInFav = None
+        self.lineInImage = None
+        lineInDevice = config.get('line_in_device')
+        if lineInDevice:
+            self.lineInFav = LineInFav(config.getSubkey('display', 'line_in_track_name', 'Line-In'), lineInDevice)
+            imagePath = config.getSubkey('display', 'line_in_track_image', 'assets/lineIn01.png')
+            if os.path.exists(imagePath):
+                self.lineInImage = Image.open(imagePath).convert('RGB')
 
         hitPadding = config.getSubkey('layout', 'button_hit_padding', 20)
         self.prevPageButton = WPDisplayButton(
@@ -65,6 +77,8 @@ class WpFavContentDisplay:
         self.favs = self.wpStatus.sonosFavs
         self.artVersion = self.wpStatus.favArt.version
         self.favList = self.sortByService(list(self.favs.items()))
+        if self.lineInFav is not None:
+            self.favList.insert(0, (self.lineInFav.title, self.lineInFav))
         self.page = min(self.page, self.pageCount() - 1)
         self.setupDisplay()
 
@@ -75,12 +89,15 @@ class WpFavContentDisplay:
             return serviceId
         return 'library' if isLibraryFav(fav) else None
 
-    # services grouped by name, then the music library, then saved Sonos playlists; Sonos order within a group
+    # services grouped by name, then the music library, then saved Sonos playlists, then the services in
+    # favorites.sort_last (Apple Music: its playlists load slowly); Sonos order within a group
     def sortByService(self, favList):
         names = self.wpStatus.serviceNames
         def key(indexed):
             index, (title, fav) = indexed
             source = self.badgeKey(fav)
+            if source in self.sortLast:
+                return (3, names.get(source, f'service {source}'), index)
             if source is None:
                 return (2, '', index)
             if source == 'library':
@@ -104,13 +121,19 @@ class WpFavContentDisplay:
             col = i % self.columns
             row = i // self.columns
             pos = [left + col * (self.tileSize + self.tileGap), top + row * (tileHeight + self.tileGap)]
-            surface = self.makeTileSurface(title, self.wpStatus.favArt.getImage(fav))
-            self.drawServiceBadge(surface, self.badgeKey(fav))
+            surface = self.makeTileSurface(title, self.tileImage(fav))
+            if not isinstance(fav, LineInFav):
+                self.drawServiceBadge(surface, self.badgeKey(fav))
             button = WPDisplayButton(pos, [self.tileSize, tileHeight], surface)
             self.tiles.append((button, fav))
 
         self.prevPageButton.setVisible(self.page > 0)
         self.nextPageButton.setVisible(self.page < self.pageCount() - 1)
+
+    def tileImage(self, fav):
+        if isinstance(fav, LineInFav):
+            return self.lineInImage
+        return self.wpStatus.favArt.getImage(fav)
 
     # art square (or initials until the art arrives) with the name underneath; the whole tile is tappable
     def makeTileSurface(self, title, image=None):

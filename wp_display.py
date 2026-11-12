@@ -130,6 +130,14 @@ class WPDisplay:
             hitPadding=hitPadding
         )
 
+        # one button, drawn bright when shuffle is on and dim when off
+        shufflePos = config.getSubkey('layout', 'shuffle_button_pos', [62, 410])
+        shuffleSize = config.getSubkey('layout', 'shuffle_button_size', [30, 30])
+        shuffleAsset = config.getSubkey('layout', 'shuffle_button_asset', 'assets/ShuffleBtn.png')
+        self.shuffleOnButton = WPDisplayButton(shufflePos, shuffleSize, shuffleAsset, hitPadding=hitPadding)
+        self.shuffleOffButton = WPDisplayButton(shufflePos, shuffleSize, shuffleAsset, hitPadding=hitPadding)
+        self.shuffleOffButton.button_surface.set_alpha(config.getSubkey('layout', 'shuffle_off_alpha', 90))
+
         self.favsBackButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_back_button_pos', [340, 640]),
             config.getSubkey('layout', 'favs_back_button_size', [45, 45]),
@@ -290,7 +298,11 @@ class WPDisplay:
         self.pauseButton.setVisible(playing)
         # dimmed and ignoring taps until the speaker has done what was last asked, so taps can't pile up
         ready = not self.wpStatus.commandsBusy()
-        for button in (self.nextButton, self.prevButton, self.playButton, self.pauseButton):
+        shuffleOn = bool(self.wpStatus.shuffle)
+        self.shuffleOnButton.setVisible(self.skipButtonsVisible() and shuffleOn)
+        self.shuffleOffButton.setVisible(self.skipButtonsVisible() and not shuffleOn)
+        for button in (self.nextButton, self.prevButton, self.playButton, self.pauseButton,
+                       self.shuffleOnButton, self.shuffleOffButton):
             button.setEnabled(ready)
         self.favsButton.setVisible(show)
         self.volumeButton.setVisible(show)
@@ -308,6 +320,8 @@ class WPDisplay:
             self.favsButton.render(self.screen)
         if self.volumeButton:
             self.volumeButton.render(self.screen)
+        self.shuffleOnButton.render(self.screen)
+        self.shuffleOffButton.render(self.screen)
 
 
     def renderTrackInfoLineIn(self,trackInfo, deltaTime):
@@ -527,6 +541,9 @@ class WPDisplay:
         if self.prevButton and self.prevButton.check_tap(event_pos):
             self.wpStatus.dispatchEvent('transport', control='prev')
             print("prev button pressed")
+            return True
+        if self.shuffleOnButton.check_tap(event_pos) or self.shuffleOffButton.check_tap(event_pos):
+            self.wpStatus.dispatchEvent('transport', control='shuffle')
             return True
         return False
 

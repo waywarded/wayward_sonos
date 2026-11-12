@@ -19,6 +19,7 @@ class WPAppStatus:
         self.favsFetching = False
         self.favArt = WPFavArtCache()
         self.serviceNames = {}          # {service id: name}, from the speakers; fetched once with the favorites
+        self.shuffle = None             # main group's shuffle, from the speaker's events; None until one arrives
 
         # group volume of the main device; the volume dial asks, the Sonos volume worker does the network calls
         self.groupVolume = None

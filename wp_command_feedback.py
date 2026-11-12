@@ -44,7 +44,7 @@ class WpCommandFeedback:
         if fav is not self.tileFav or self.tileArtVersion != self.wpStatus.favArt.version:
             self.tileFav = fav
             self.tileArtVersion = self.wpStatus.favArt.version
-            self.tile = self.parent.favContentDisplay.makeTileSurface(title, self.wpStatus.favArt.getImage(fav))
+            self.tile = self.parent.favContentDisplay.makeTileSurface(title, self.parent.favContentDisplay.tileImage(fav))
         return self.tile
 
     def makeCancelSurface(self, size):

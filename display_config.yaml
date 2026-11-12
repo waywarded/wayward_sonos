@@ -97,6 +97,12 @@ layout:
   favs_button_size: [30, 30]
   favs_button_asset: "assets/FavsBtn.png"
 
+  # bright when shuffle is on, dim when off; hidden for line-in
+  shuffle_button_pos: [62, 410]
+  shuffle_button_size: [30, 30]
+  shuffle_button_asset: "assets/ShuffleBtn.png"
+  shuffle_off_alpha: 90
+
   # press and hold for the volume dial
   volume_button_pos: [450, 645]
   volume_button_size: [30, 30]
@@ -132,6 +138,8 @@ favorites:
   # whole playlist first, so long ones can take a while). cloud: one call to the Sonos cloud, like the Sonos app;
   # needs internet and a one-time `uv run sonos_auth.py`. Falls back to local if that sign-in is missing.
   load_via: cloud
+  # services whose favorites go at the end of the grid, after the library and saved Sonos playlists
+  sort_last: [204]      # Apple Music: its playlists load slowly or fail
   # each favorite tile gets a badge for its music service, keyed by the service id in the favorite's link
   # (204 = Apple Music, 12 = Spotify, 157 = Bandcamp; the log lists them at startup).
   # icon: a PNG to show; if the file is missing, a round badge with `short` (or the name's initials) is drawn.

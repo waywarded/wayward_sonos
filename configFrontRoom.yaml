@@ -1,5 +1,7 @@
 # no Stream Deck on the Front Room display
 stream_deck: false
+# the speaker whose line-in the first favorites tile plays (display.line_in_track_name / _image)
+line_in_device: "Front Room"
 target_devices:
   - name: Kitchen
     required: false

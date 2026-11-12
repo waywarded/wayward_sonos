@@ -50,8 +50,12 @@ def main():
     parser.add_argument('-f','--fullscreen',action='store_true')
     parser.add_argument('-r','--round',action='store_true', help='dev aid: mask the window to the round display')
     parser.add_argument('--fake_favs', type=int, default=None, help='dev aid: replace Sonos favorites with N fake ones')
+    parser.add_argument('--trace_http', action='store_true', help='dev aid: log every request to the speakers')
 
     args = parser.parse_args()
+    if args.trace_http:
+        import wp_http_trace
+        wp_http_trace.install()
     configPath = args.config
     displayConfigPath = args.display_config
     # Load config

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # Starts the app detached from the terminal (so it survives leaving SSH), restarts it after a crash,
 # and refuses to start a second copy.
-#   python3 launcher.py start | stop | restart | status | run
-# Settings come from local.env (SOCO_CONFIG, SOCO_FLAGS, DISPLAY), same as the runme scripts.
+#   python3 launcher.py start | stop | restart | status | run   [--config configKitchen.yaml]
+# Settings come from local.env (SOCO_CONFIG, SOCO_FLAGS, DISPLAY), same as the runme scripts;
+# --config overrides SOCO_CONFIG for this run only.
 # Standard library only, so it runs with the system python3 before uv has set anything up.
+import argparse
 import fcntl
 import os
 import shlex
@@ -36,11 +38,14 @@ def loadEnv():
     return env
 
 
-def appCommand(env):
-    config = env.get('SOCO_CONFIG') or 'configFrontRoom.yaml'
+def configFor(env, configOverride):
+    return configOverride or env.get('SOCO_CONFIG') or 'configFrontRoom.yaml'
+
+
+def appCommand(env, configOverride):
     # like runmeonce.sh: fullscreen unless local.env sets SOCO_FLAGS (empty means no flags)
     flags = shlex.split(env['SOCO_FLAGS']) if 'SOCO_FLAGS' in env else ['-f']
-    return ['uv', 'run', 'main.py', '--config', config] + flags
+    return ['uv', 'run', 'main.py', '--config', configFor(env, configOverride)] + flags
 
 
 def appEnvironment(env):
@@ -64,16 +69,22 @@ def tryLock():
     return fd
 
 
-def runningPid():
+# the running launcher writes its pid and its --config (empty when it follows local.env) into the lock file
+def runningInfo():
     fd = tryLock()
     if fd is not None:
         os.close(fd)
-        return None
+        return None, None
     try:
         with open(LOCK_PATH) as f:
-            return int(f.read().strip())
+            lines = f.read().split('\n')
+        return int(lines[0]), (lines[1] if len(lines) > 1 else '') or None
     except (OSError, ValueError):
-        return -1   # locked, but the pid isn't written yet
+        return -1, None   # locked, but not written yet
+
+
+def runningPid():
+    return runningInfo()[0]
 
 
 def onStopSignal(signum, frame):
@@ -86,22 +97,23 @@ def onStopSignal(signum, frame):
             pass
 
 
-def run():
+def run(configOverride=None):
     global child
     fd = tryLock()
     if fd is None:
         print(f'already running (pid {runningPid()})')
         return 1
     os.ftruncate(fd, 0)
-    os.write(fd, str(os.getpid()).encode())
+    os.write(fd, f'{os.getpid()}\n{configOverride or ""}'.encode())
 
     signal.signal(signal.SIGTERM, onStopSignal)
     signal.signal(signal.SIGINT, onStopSignal)
     os.chdir(APP_DIR)
 
     while not stopping:
+        # re-read each time, so an edited local.env takes effect on the next restart
         env = loadEnv()
-        command = appCommand(env)
+        command = appCommand(env, configOverride)
         log(f'starting: {" ".join(command)}')
         # own process group, so stop reaches uv and the python it starts
         child = subprocess.Popen(command, env=appEnvironment(env), start_new_session=True)
@@ -124,27 +136,33 @@ def run():
     return 0
 
 
-def start():
+def start(configOverride=None):
     pid = runningPid()
     if pid is not None:
         print(f'already running (pid {pid})')
         return 1
+    if configOverride and not os.path.exists(os.path.join(APP_DIR, configOverride)):
+        print(f'no such config: {configOverride}')
+        return 1
+    command = [sys.executable, os.path.abspath(__file__), 'run']
+    if configOverride:
+        command += ['--config', configOverride]
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
     with open(LOG_PATH, 'a') as logFile:
         # new session: not tied to this terminal, so logging out of SSH doesn't stop it
-        subprocess.Popen([sys.executable, os.path.abspath(__file__), 'run'], cwd=APP_DIR, stdin=subprocess.DEVNULL,
+        subprocess.Popen(command, cwd=APP_DIR, stdin=subprocess.DEVNULL,
                          stdout=logFile, stderr=subprocess.STDOUT, start_new_session=True)
     for _ in range(30):
         time.sleep(0.1)
         pid = runningPid()
         if pid not in (None, -1):
-            print(f'started (pid {pid}), output in logs/run.log')
+            print(f'started (pid {pid}) with {describeConfig(configOverride)}, output in logs/run.log')
             return 0
     print('failed to start, see logs/run.log')
     return 1
 
 
-def stop():
+def stop(configOverride=None):
     pid = runningPid()
     if pid is None:
         print('not running')
@@ -162,9 +180,19 @@ def stop():
     return 1
 
 
-def status():
-    pid = runningPid()
-    print('not running' if pid is None else f'running (pid {pid})')
+# without --config, restart keeps whatever config the running copy was started with
+def restart(configOverride=None):
+    if configOverride is None:
+        configOverride = runningInfo()[1]
+    return stop() or start(configOverride)
+
+
+def status(configOverride=None):
+    pid, runningConfig = runningInfo()
+    if pid is None:
+        print('not running')
+    else:
+        print(f'running (pid {pid}) with {describeConfig(runningConfig)}')
     if os.path.exists(LOG_PATH):
         with open(LOG_PATH, errors='replace') as f:
             lines = f.readlines()[-10:]
@@ -174,14 +202,20 @@ def status():
     return 0
 
 
+def describeConfig(configOverride):
+    if configOverride:
+        return f'{configOverride} (--config)'
+    return f'{configFor(loadEnv(), None)} (local.env)'
+
+
 def log(message):
     print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} launcher: {message}', flush=True)
 
 
 if __name__ == '__main__':
-    commands = {'start': start, 'stop': stop, 'status': status, 'run': run,
-                'restart': lambda: stop() or start()}
-    if len(sys.argv) != 2 or sys.argv[1] not in commands:
-        print('usage: launcher.py start | stop | restart | status | run')
-        sys.exit(2)
-    sys.exit(commands[sys.argv[1]]())
+    commands = {'start': start, 'stop': stop, 'restart': restart, 'status': status, 'run': run}
+    parser = argparse.ArgumentParser(description='Run the Sonos display detached, one copy only.')
+    parser.add_argument('command', choices=commands.keys())
+    parser.add_argument('--config', help='room config for this run, instead of SOCO_CONFIG in local.env')
+    args = parser.parse_args()
+    sys.exit(commands[args.command](args.config))

@@ -28,8 +28,10 @@ class WpVolumeDial:
         self.dimSurface = pygame.Surface((size, size), pygame.SRCALPHA)
         self.dimSurface.fill((0, 0, 0, dimAlpha))
 
-        # the gauge runs clockwise from 7:30 to 4:30, like a stereo knob (screen angles: 0 = 3 o'clock, 90 = 6 o'clock)
-        self.gaugeStart = 135
+        # the gauge starts at the volume button and runs clockwise, so the finger that pressed it sits on the
+        # start of the track and turning up traces along it (screen angles: 0 = 3 o'clock, 90 = 6 o'clock)
+        button = getattr(parent, 'volumeButton', None)
+        self.gaugeStart = self.angleOf(button.rect.center) if button else 135
         self.gaugeSweep = 270
 
         self.volume = None          # float while the dial is up; None until Sonos has told us the level

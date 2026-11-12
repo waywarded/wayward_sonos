@@ -49,7 +49,6 @@ The screen is a 720px circle: usable width at height `y` is `2·sqrt(360² − (
 ## Cleanup
 - On-screen taps (transport and favorites) call Sonos on the display thread; playing a favorite also sleeps 0.5s, so the screen freezes briefly. Consider handing commands to the Sonos thread.
 - Pause icon looks smaller than play: `PauseBtn.png` is 63×81 with padding, squashed to 45×45 (Ed fixing the art).
-- `display_config.yaml` asks for `assets/VolDownBtn.png` but the file is `assets/volDownBtn.png`. Works on the Mac (case-insensitive), fails on the Pi.
 - Stream Deck loop redraws every favorite key every second; only redraw when favorites change.
 - Remove leftover `print()` debugging (e.g. `mainCoordinator()` prints "get coordinator" on every call; transport info, fav dumps).
 - `logs/run.log` and `logs/app.log` grow forever (and run.log repeats app.log); rotate or cap them for weeks-long runs.

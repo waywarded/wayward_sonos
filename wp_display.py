@@ -10,6 +10,7 @@ from wp_app_state import WpAppState
 from wp_display_button import WPDisplayButton
 from wp_fav_content_display import WpFavContentDisplay
 from wp_volume_dial import WpVolumeDial
+from wp_command_feedback import WpCommandFeedback
 from wp_soco import NowPlayingInfo
 
 from enum import Enum
@@ -145,6 +146,7 @@ class WPDisplay:
 
         self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)
         self.volumeDial = WpVolumeDial(config, appStatus, self)
+        self.commandFeedback = WpCommandFeedback(config, appStatus, self)
 
         # favorites slides up over now playing: 0 = hidden, 1 = fully open
         self.favsSlide = 0.0
@@ -286,6 +288,10 @@ class WPDisplay:
         self.prevButton.setVisible(self.skipButtonsVisible())
         self.playButton.setVisible(show and not playing)
         self.pauseButton.setVisible(playing)
+        # dimmed and ignoring taps until the speaker has done what was last asked, so taps can't pile up
+        ready = not self.wpStatus.commandsBusy()
+        for button in (self.nextButton, self.prevButton, self.playButton, self.pauseButton):
+            button.setEnabled(ready)
         self.favsButton.setVisible(show)
         self.volumeButton.setVisible(show)
 
@@ -393,6 +399,8 @@ class WPDisplay:
             self.renderNoConnectionInfo(self.wpStatus.status, deltaTime)
         else:
             self.renderTrackInfo(deltaTime)
+            self.commandFeedback.update(deltaTime)
+            self.commandFeedback.render(self.screen)
         
     def renderQuitConfirm(self, deltaTime):
         self.screen.fill((25, 25, 25))
@@ -536,6 +544,10 @@ class WPDisplay:
             self.displayState = WpDisplayState.INFO
             
     def handleTapInfo(self, position):
+        # same condition renderInfo draws it under, so taps never go to an overlay that isn't on screen
+        if self.wpStatus.appState == WpAppState.CONNECTED and self.commandFeedback.active():
+            self.commandFeedback.handleTap(position)
+            return
         if self.checkButtonTap(position):
             return
         if self.quitHoldRect.collidepoint(position):

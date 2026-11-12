@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 from enum import Enum
 from wp_app_state import WpAppState
 from wp_fav_art import WPFavArtCache
@@ -23,6 +24,13 @@ class WPAppStatus:
         self.volumeReadRequested = False
         self._volumeTarget = None
         self._volumeLock = threading.Lock()
+
+        # Sonos commands run on their own thread; the display reads these to show the tap was seen
+        self.commandsPending = 0      # queued or running
+        self.startingFav = None       # (title, fav) while a favorite is being started
+        self.commandFailure = None    # (message, time.monotonic()) of the last failed command
+        self.cancelRequested = threading.Event()    # set by the Cancel button; the running favorite stops waiting
+        self._commandLock = threading.Lock()
 
     def updateStatus(self, newStatus):
         self.status = newStatus
@@ -82,4 +90,27 @@ class WPAppStatus:
 
     def favsRefreshPending(self):
         return self.favsRefreshRequested or self.favsFetching
-    
+
+    def commandQueued(self, startingFav=None):
+        with self._commandLock:
+            self.commandsPending += 1
+            if startingFav is not None:
+                self.startingFav = startingFav
+                self.commandFailure = None
+
+    def commandFinished(self):
+        with self._commandLock:
+            self.commandsPending -= 1
+            if self.commandsPending == 0:
+                self.startingFav = None
+
+    # the speaker carries on with whatever it was asked; the app just stops waiting and won't press play
+    def requestCancel(self):
+        self.cancelRequested.set()
+        self.startingFav = None
+
+    def commandFailed(self, message):
+        self.commandFailure = (message, time.monotonic())
+
+    def commandsBusy(self):
+        return self.commandsPending > 0

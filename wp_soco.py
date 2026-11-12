@@ -6,6 +6,7 @@ import threading
 from dataclasses import dataclass
 import time
 import queue
+import re
 
 from soco.core import DidlPlaylistContainer
 
@@ -42,6 +43,20 @@ class NowPlayingInfo:
         return self.transport_state == 'PLAYING'
 
 
+class CommandCancelled(Exception):
+    pass
+
+
+# the music service a favorite plays from, from the sid in its link (e.g. ...?sid=204&flags=...): 204 is Apple Music,
+# 12 Spotify. None for favorites with no service, like saved queues.
+def favServiceId(fav):
+    try:
+        match = re.search(r'[?&]sid=(\d+)', fav.get_uri())
+    except Exception:
+        return None
+    return int(match.group(1)) if match else None
+
+
 class WPSoco:
 
     def __init__(self, config, appStatus, fakeFavCount=None):
@@ -53,6 +68,8 @@ class WPSoco:
         self.mainHouseholdDevices = []
         self.coordinator = None
         self.sub = None
+        self.commands = queue.Queue()   # (run, kwargs) from taps, for commandThread
+        self.addToQueueTimeout = config.getSubkey('connection', 'add_to_queue_timeout', 90)
         self.status.subscribeToButtonEvent('transport', self.handleTransportEvent)
         self.status.subscribeToButtonEvent('content', self.handleContentEvent)
 
@@ -207,10 +224,14 @@ class WPSoco:
                 newFavs[title] = FakeFav(title)
         else:
             sonos_favs = self.mainCoordinator().music_library.get_sonos_favorites()
+            hiddenServices = self.config.getSubkey('favorites', 'hide_service_ids', [])
             for fav in sonos_favs:
                 print(f"title: {fav.title}")
                 print(f"ref: {fav.reference}")
                 print(f"resources: {fav.resources}")
+                if favServiceId(fav) in hiddenServices:
+                    self.status.logSilent(f"Hiding favorite '{fav.title}' (service {favServiceId(fav)})")
+                    continue
                 newFavs[fav.title] = fav
         # titles show right away; art fills in once downloaded
         self.status.setFavs(newFavs)
@@ -355,6 +376,8 @@ class WPSoco:
         t.start()
         v = threading.Thread(target=self.volumeThread, daemon=True)
         v.start()
+        c = threading.Thread(target=self.commandThread, daemon=True, name='commandThread')
+        c.start()
 
     # separate from socoThread, which can sit in an event wait or a favorites fetch for seconds;
     # the volume dial needs its changes sent within a fraction of a second
@@ -382,7 +405,35 @@ class WPSoco:
         except Exception as e:
             self.status.log(f"Volume exception: {e}", logging.ERROR)
 
-    def handleTransportEvent(self,**kwargs):
+    # taps arrive on the display (or Stream Deck) thread: queue the command and return straight away,
+    # so a slow speaker never freezes the screen. commandThread runs them one at a time, in tap order.
+    def handleTransportEvent(self, **kwargs):
+        self.queueCommand(self.runTransportCommand, kwargs)
+
+    def handleContentEvent(self, **kwargs):
+        startingFav = None
+        params = kwargs.get('params') or {}
+        if kwargs.get('control') == 'play_fav' and 'fav' in params:
+            startingFav = (params['fav'].title, params['fav'])
+        self.queueCommand(self.runContentCommand, kwargs, startingFav)
+
+    def queueCommand(self, run, kwargs, startingFav=None):
+        self.status.commandQueued(startingFav)
+        self.commands.put((run, kwargs, startingFav))
+
+    def commandThread(self):
+        while True:
+            run, kwargs, startingFav = self.commands.get()
+            self.status.cancelRequested.clear()
+            if startingFav is not None:
+                # several favorites may be queued: show the one actually being started
+                self.status.startingFav = startingFav
+            try:
+                run(**kwargs)
+            finally:
+                self.status.commandFinished()
+
+    def runTransportCommand(self,**kwargs):
         print (f'transport event: {kwargs}')
 
         try:
@@ -410,7 +461,7 @@ class WPSoco:
             self.status.log(f"Exception sending command {e}")
 
 
-    def handleContentEvent(self,**kwargs):
+    def runContentCommand(self,**kwargs):
         print (f'content event: {kwargs}')
 
         try:
@@ -430,14 +481,41 @@ class WPSoco:
                                 started = time.monotonic()
                                 coordinator = self.timedCall('coordinator lookup', self.mainCoordinator)
                                 self.timedCall('clear_queue', coordinator.clear_queue)
-                                self.timedCall('add_to_queue', lambda: coordinator.add_to_queue(fav.reference))
+                                # the speaker loads the whole playlist from the music service before it answers,
+                                # which takes well over soco's 20s default for long ones
+                                self.timedCall('add_to_queue', lambda: self.waitCancellable('add_to_queue',
+                                    lambda: coordinator.add_to_queue(fav.reference, timeout=self.addToQueueTimeout)))
                                 self.timedCall('play_from_queue', lambda: coordinator.play_from_queue(0))
                                 time.sleep(.5)
                                 self.timedCall('fetchState', self.fetchState)
                                 self.logTiming(f'play_fav {fav.title} total', started)
+        except CommandCancelled:
+            self.status.log("Cancelled starting the favorite")
         except Exception as e:
             self.status.log(f"Exception sending command {e}")
+            if kwargs.get('control') == 'play_fav':
+                fav = (kwargs.get('params') or {}).get('fav')
+                self.status.commandFailed(f"Couldn't play {fav.title if fav else 'favorite'}")
 
+
+    # a blocked request can't be interrupted, so it runs on a throwaway thread while this one watches for Cancel.
+    # after a cancel the request finishes (or fails) on its own and its result is ignored.
+    def waitCancellable(self, label, call):
+        result = {}
+        def work():
+            try:
+                result['value'] = call()
+            except Exception as e:
+                result['error'] = e
+        worker = threading.Thread(target=work, daemon=True, name=f'{label} worker')
+        worker.start()
+        while worker.is_alive():
+            worker.join(0.1)
+            if self.status.cancelRequested.is_set():
+                raise CommandCancelled()
+        if 'error' in result:
+            raise result['error']
+        return result.get('value')
 
     # temporary: finding out which Sonos calls make taps slow on the Pi (grep "Sonos timing" in logs/app.log)
     def timedCall(self, label, call):

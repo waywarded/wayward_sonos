@@ -122,3 +122,8 @@ deck:
   prev_button_asset: 'assets/PrevTrackBtn.png'
   vol_up_button_asset: 'assets/VolUpBtn.png'
   vol_down_button_asset: 'assets/VolDownBtn.png'
+favorites:
+  # favorites from these music services are left out of the screen and the Stream Deck.
+  # 204 = Apple Music: Sonos speakers load Apple Music playlists unreliably when asked directly (they can take
+  # 20s and fail), though the Sonos app plays them fine. 12 = Spotify.
+  hide_service_ids: [204]

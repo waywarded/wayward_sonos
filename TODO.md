@@ -38,6 +38,11 @@ One step at a time, each tested before the next.
    Test: present with 0 favorites and with several; absent when `line_in_device` isn't set; plays the record player on Front Room.
 10. Later: a UI for switching which device/group the display controls.
 11. Later: start at boot with a systemd service that runs `launcher.py run` (the launcher already handles one copy, display and restarts).
+12. **Slow taps (branch `claude/commands-thread`).** On the Pi, Sonos calls took 1-20s inside the app but ~0.05s from a script on the same Pi (network, CPU, event subscription all fine).
+   Apple Music: `add_to_queue` of Apple library playlists is unreliable on the speakers. The speaker itself gives up after 20s with UPnP 800, and after a failure other Apple playlists turn slow too, while Spotify stays fast. Re-saving the favorite didn't help. The Sonos app (Control API `loadFavorite`, via the cloud) plays the same playlist in ~2s. Containers can't be played with `play_uri` (UPnP 714); radio/stream favorites would need it, since they can't be queued. The queue doesn't fill gradually while loading, so playing early isn't possible.
+   Done on the branch: taps queue commands for a new `commandThread` (one at a time, in tap order; screen and Stream Deck still call `dispatchEvent`); `add_to_queue` waits up to 90s (`connection.add_to_queue_timeout`); transport buttons dim and ignore taps while a command is pending; a tapped favorite dims the whole screen with its tile, a spinner, "Starting..." and Cancel (the app stops waiting and skips play; the speaker finishes on its own), or shows "Couldn't play" for 4s, dismissed by a tap (`wp_command_feedback.py`). Favorites from services in `favorites.hide_service_ids` are left out (204 = Apple Music). Dev aid `--trace_http` logs every request to the speakers.
+   Try on the Pi: a long playlist starts and the screen stays live meanwhile; Cancel; buttons dimming on fast taps doesn't feel flickery.
+   Next: one `fetchState` per burst of events (a favorite sends 4-6); album art fetch timeout and no retry of a failed link; subscription housekeeping (unsubscribe on exit, 10 min auto-renew); remove the temporary "Sonos timing" logs. Maybe later: the players' local Control API (websocket, port 1443) to `loadFavorite` like the Sonos app does, if Apple Music is wanted back.
 
 ## Round display
 The screen is a 720px circle: usable width at height `y` is `2·sqrt(360² − (y−360)²)`.
@@ -47,7 +52,6 @@ The screen is a 720px circle: usable width at height `y` is `2·sqrt(360² − (
 - Consider a helper that returns usable width at a given y for new layout elements.
 
 ## Cleanup
-- On-screen taps (transport and favorites) call Sonos on the display thread; playing a favorite also sleeps 0.5s, so the screen freezes briefly. Consider handing commands to the Sonos thread.
 - Pause icon looks smaller than play: `PauseBtn.png` is 63×81 with padding, squashed to 45×45 (Ed fixing the art).
 - Stream Deck loop redraws every favorite key every second; only redraw when favorites change.
 - Remove leftover `print()` debugging (e.g. `mainCoordinator()` prints "get coordinator" on every call; transport info, fav dumps).

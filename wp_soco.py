@@ -92,6 +92,9 @@ class WPSoco:
         self.addToQueueTimeout = config.getSubkey('connection', 'add_to_queue_timeout', 90)
         self.cloud = None
         self.groupId = None             # the main device's group, for the cloud; kept current by fetchState
+        self.subscriptionTimeout = config.getSubkey('connection', 'subscription_timeout', 600)
+        self.subscriptionCheckTime = config.getSubkey('connection', 'subscription_check_time', 60)
+        self.lastSubscriptionCheck = 0
         self.cloudStartWait = config.getSubkey('connection', 'cloud_start_wait', 60)
         if config.getSubkey('favorites', 'load_via', 'local') == 'cloud':
             cloud = WPSonosCloud(timeout=config.getSubkey('connection', 'cloud_timeout', 30))
@@ -334,15 +337,55 @@ class WPSoco:
                 self.status.log(
                     f"Subscribing to Sonos events for main device '{self.mainDevice.player_name}'...",
                     logging.INFO)
-                print("get coordinator")
-                self.coordinator = self.mainDevice.group.coordinator
-                self.sub = self.coordinator.avTransport.subscribe()
+                self.subscribe()
                 self.status.updateAppState(WpAppState.CONNECTED)
             else:
                 self.sub = None
                 self.status.updateAppState(WpAppState.NO_CONNECTION)
         except Exception as e:
             self.status.log(f'TRYCONNECT EXCEPTION: {e}')
+            self.sub = None
+            self.status.updateAppState(WpAppState.NO_CONNECTION)
+
+    def subscribe(self):
+        self.coordinator = self.mainDevice.group.coordinator
+        self.sub = self.coordinator.avTransport.subscribe(requested_timeout=self.subscriptionTimeout)
+        self.lastSubscriptionCheck = time.monotonic()
+        self.status.log(f"Subscribed to events from '{self.coordinator.player_name}' for {self.sub.timeout}s", logging.INFO)
+
+    # events stop without any error when the speaker forgets the subscription (it restarted, e.g. an overnight
+    # update) or the group gets a new coordinator, so: renew well before it runs out, and subscribe again when a
+    # renewal fails or the coordinator changed. Checked once a minute from socoThread.
+    def checkSubscription(self):
+        if time.monotonic() - self.lastSubscriptionCheck < self.subscriptionCheckTime:
+            return
+        self.lastSubscriptionCheck = time.monotonic()
+        try:
+            coordinator = self.mainDevice.group.coordinator
+            if coordinator != self.coordinator:
+                reason = f"coordinator is now '{coordinator.player_name}'"
+            elif self.sub.time_left < self.subscriptionTimeout / 3:
+                try:
+                    self.sub.renew(requested_timeout=self.subscriptionTimeout)
+                    self.status.logSilent(f"Renewed event subscription ({self.sub.time_left:.0f}s)")
+                    return
+                except Exception as e:
+                    reason = f"renewal failed: {e}"
+            else:
+                return
+        except Exception as e:
+            reason = f"check failed: {e}"
+
+        self.status.log(f"Subscribing again to Sonos events: {reason}", logging.WARNING)
+        try:
+            self.sub.unsubscribe()
+        except Exception:
+            pass
+        try:
+            self.subscribe()
+            self.fetchState()       # catch up on what was missed
+        except Exception as e:
+            self.status.log(f"Couldn't subscribe again ({e}); reconnecting", logging.WARNING)
             self.sub = None
             self.status.updateAppState(WpAppState.NO_CONNECTION)
 
@@ -401,6 +444,8 @@ class WPSoco:
 
             time.sleep(1)
 
+            if self.sub is not None and self.status.appState == WpAppState.CONNECTED:
+                self.checkSubscription()
             self.checkFavsRefresh(favsRefreshTime)
 
             # If we think we have a connection, let's ping and make sure it's still there

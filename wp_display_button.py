@@ -14,6 +14,12 @@ class WPDisplayButton:
         self.visible = True
         self.enabled = True
 
+    # for buttons placed by their centre (the rooms screen's Set main)
+    def moveCenter(self, center):
+        padding = (self.hitRect.width - self.rect.width) // 2
+        self.rect.center = (round(center[0]), round(center[1]))
+        self.hitRect = self.rect.inflate(2 * padding, 2 * padding)
+
     def setVisible(self, visible):
         self.visible = visible
 

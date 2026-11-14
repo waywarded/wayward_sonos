@@ -9,6 +9,7 @@ from wp_autosplit_text import WpAutoSplitText
 from wp_app_state import WpAppState
 from wp_display_button import WPDisplayButton
 from wp_fav_content_display import WpFavContentDisplay
+from wp_rooms_display import WpRoomsDisplay
 from wp_volume_dial import WpVolumeDial
 from wp_command_feedback import WpCommandFeedback
 from wp_soco import NowPlayingInfo
@@ -18,6 +19,7 @@ from enum import Enum
 class WpDisplayState(Enum):
     INFO="Info"
     FAVORITES="Favorites"
+    ROOMS="Rooms"
     VOLUME="Volume"
     QUIT_CONFIRM="QuitConfirm"
     QUITTING="Quitting"
@@ -138,6 +140,14 @@ class WPDisplay:
         self.shuffleOffButton = WPDisplayButton(shufflePos, shuffleSize, shuffleAsset, hitPadding=hitPadding)
         self.shuffleOffButton.button_surface.set_alpha(config.getSubkey('layout', 'shuffle_off_alpha', 90))
 
+        # opens the rooms screen (grouping)
+        self.groupButton = WPDisplayButton(
+            config.getSubkey('layout', 'group_button_pos', [500, 640]),
+            config.getSubkey('layout', 'group_button_size', [30, 30]),
+            config.getSubkey('layout', 'group_button_asset', 'assets/SpeakerGroup.png'),
+            hitPadding=hitPadding
+        )
+
         self.favsBackButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_back_button_pos', [340, 640]),
             config.getSubkey('layout', 'favs_back_button_size', [45, 45]),
@@ -153,10 +163,11 @@ class WPDisplay:
         )
 
         self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)
+        self.roomsDisplay = WpRoomsDisplay(config, appStatus, self)
         self.volumeDial = WpVolumeDial(config, appStatus, self)
         self.commandFeedback = WpCommandFeedback(config, appStatus, self)
 
-        # favorites slides up over now playing: 0 = hidden, 1 = fully open
+        # favorites (or rooms) slides up over now playing: 0 = hidden, 1 = fully open
         self.favsSlide = 0.0
         self.favsSlideTarget = 0.0
         self.favsSlideTime = config.getSubkey('layout', 'favs_slide_time', 0.3)
@@ -306,6 +317,7 @@ class WPDisplay:
             button.setEnabled(ready)
         self.favsButton.setVisible(show)
         self.volumeButton.setVisible(show)
+        self.groupButton.setVisible(show)
 
     def renderButtons(self, trackinfo : NowPlayingInfo ):
         if self.nextButton:
@@ -322,6 +334,7 @@ class WPDisplay:
             self.volumeButton.render(self.screen)
         self.shuffleOnButton.render(self.screen)
         self.shuffleOffButton.render(self.screen)
+        self.groupButton.render(self.screen)
 
 
     def renderTrackInfoLineIn(self,trackInfo, deltaTime):
@@ -430,6 +443,13 @@ class WPDisplay:
         self.displayState = WpDisplayState.FAVORITES
         self.favsSlideTarget = 1.0
 
+    # the rooms screen slides up the same way, on the same slide
+    def openRooms(self):
+        self.displayState = WpDisplayState.ROOMS
+        self.favsSlideTarget = 1.0
+        self.roomsDisplay.reset()
+        self.wpStatus.requestRoomsRefresh()
+
     def closeFavorites(self):
         self.favsSlideTarget = 0.0
 
@@ -437,6 +457,23 @@ class WPDisplay:
         return self.favsSlide != self.favsSlideTarget
 
     def renderFavorites(self, deltaTime):
+        self.renderSlidingPanel(deltaTime, self.drawFavoritesPanel)
+
+    def drawFavoritesPanel(self, panel):
+        self._draw_centered_text("Favorites", (255,255,255), shadow=True, yPos = 60, font=self.uiHeaderFont, surface=panel)
+        self.favContentDisplay.render(panel)
+        if self.favsBackButton:
+            self.favsBackButton.render(panel)
+        if self.favsRefreshButton:
+            self.favsRefreshButton.setEnabled(not self.wpStatus.favsRefreshPending())
+            self.favsRefreshButton.render(panel)
+
+    def drawRoomsPanel(self, panel):
+        self._draw_centered_text(self.roomsDisplay.title(), (255,255,255), shadow=True, yPos = 60, font=self.uiHeaderFont, surface=panel)
+        self.roomsDisplay.render(panel)
+        self.favsBackButton.render(panel)
+
+    def renderSlidingPanel(self, deltaTime, drawPanel):
         self.favsSlide = moveToward(self.favsSlide, self.favsSlideTarget, deltaTime / self.favsSlideTime)
         if self.favsSlide == 0.0 and self.favsSlideTarget == 0.0:
             self.displayState = WpDisplayState.INFO
@@ -449,16 +486,7 @@ class WPDisplay:
 
         panel = self.favsPanel
         panel.fill(self.favsPanelColor)
-
-        self._draw_centered_text("Favorites", (255,255,255), shadow=True, yPos = 60, font=self.uiHeaderFont, surface=panel)
-
-        self.favContentDisplay.render(panel)
-
-        if self.favsBackButton:
-            self.favsBackButton.render(panel)
-        if self.favsRefreshButton:
-            self.favsRefreshButton.setEnabled(not self.wpStatus.favsRefreshPending())
-            self.favsRefreshButton.render(panel)
+        drawPanel(panel)
 
         # ease out: fast start, gentle stop
         eased = 1 - (1 - self.favsSlide) ** 3
@@ -479,6 +507,8 @@ class WPDisplay:
             self.renderInfo(deltaTime)
         elif self.displayState == WpDisplayState.FAVORITES:
             self.renderFavorites(deltaTime)
+        elif self.displayState == WpDisplayState.ROOMS:
+            self.renderSlidingPanel(deltaTime, self.drawRoomsPanel)
         elif self.displayState == WpDisplayState.VOLUME:
             self.renderInfo(deltaTime)
             self.volumeDial.update(deltaTime)
@@ -542,6 +572,9 @@ class WPDisplay:
             self.wpStatus.dispatchEvent('transport', control='prev')
             print("prev button pressed")
             return True
+        if self.groupButton.check_tap(event_pos):
+            self.openRooms()
+            return True
         if self.shuffleOnButton.check_tap(event_pos) or self.shuffleOffButton.check_tap(event_pos):
             self.wpStatus.dispatchEvent('transport', control='shuffle')
             return True
@@ -556,6 +589,8 @@ class WPDisplay:
             self.handleTapInfo(position)
         elif self.displayState == WpDisplayState.FAVORITES:
             self.handleTapFavorites(position)
+        elif self.displayState == WpDisplayState.ROOMS:
+            self.handleTapRooms(position)
         elif self.displayState == WpDisplayState.VOLUME:
             # the release went missing (e.g. dropped touch event); a new touch closes the dial
             self.displayState = WpDisplayState.INFO
@@ -592,6 +627,18 @@ class WPDisplay:
             pass
         elif self.favContentDisplay.checkTileTap(position):
             self.closeFavorites()
+
+    def handleTapRooms(self, position):
+        if self.favsSliding():
+            return
+        if self.favsBackButton.check_tap(position):
+            self.closeFavorites()
+        elif self.roomsDisplay.checkPageTap(position):
+            pass
+        elif self.roomsDisplay.checkSetMainTap(position):
+            pass
+        else:
+            self.roomsDisplay.checkRowTap(position)
 
     def handleTapConfirm(self, position):
         if position[1] > self.screenSize//2:

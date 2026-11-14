@@ -20,6 +20,12 @@ class WPAppStatus:
         self.favArt = WPFavArtCache()
         self.serviceNames = {}          # {service id: name}, from the speakers; fetched once with the favorites
         self.shuffle = None             # main group's shuffle, from the speaker's events; None until one arrives
+        self.rooms = []                 # [(name, in the main room's group)] by name, for the rooms screen; swapped whole
+        self.mainRoom = None
+        self.roomsRefreshRequested = False
+        self.roomPending = None         # the room being added or removed, while the command is queued or running
+        self.roomFailure = None         # (message, time.monotonic()) of the last failed add or remove
+        self.mainRoomRequested = None   # a room picked as the new main room, for the Sonos thread
 
         # group volume of the main device; the volume dial asks, the Sonos volume worker does the network calls
         self.groupVolume = None
@@ -75,6 +81,22 @@ class WPAppStatus:
     # the display can't wait on the network, so it asks and the Sonos thread does the fetch
     def requestFavsRefresh(self):
         self.favsRefreshRequested = True
+
+    # set together, the main room first, so the rooms screen never pairs a new list with an old main room
+    def setRooms(self, mainRoom, rooms):
+        self.mainRoom = mainRoom
+        self.rooms = rooms
+
+    # the rooms screen asks when it opens, since grouping done in the Sonos app doesn't reach us as an event
+    def requestRoomsRefresh(self):
+        self.roomsRefreshRequested = True
+
+    def requestMainRoom(self, room):
+        self.roomPending = room
+        self.mainRoomRequested = room
+
+    def roomFailed(self, message):
+        self.roomFailure = (message, time.monotonic())
 
     def requestVolume(self, volume):
         with self._volumeLock:

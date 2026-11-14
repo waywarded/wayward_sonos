@@ -104,17 +104,23 @@ class WPSoco:
                 self.status.log("favorites.load_via is cloud but there's no Sonos sign-in (run sonos_auth.py); loading favorites locally", logging.WARNING)
         self.status.subscribeToButtonEvent('transport', self.handleTransportEvent)
         self.status.subscribeToButtonEvent('content', self.handleContentEvent)
+        self.status.subscribeToButtonEvent('room', self.handleRoomEvent)
+        self.groupChangeWait = config.getSubkey('connection', 'group_change_wait', 5)
+        # the other speakers can take ~20s to report a grouping change; until then we show what we asked for
+        self.groupChangeSettle = config.getSubkey('connection', 'group_change_settle', 30)
+        self.expectedRooms = {}         # {room: (in main group, until)} for our own recent changes
 
     def discoverDevices(self):
         self.status.updateStatus("Sonos discovery...")
         self.status.updateAppState(WpAppState.CONNECTING)
         self.status.log("Discovering Sonos devices on the network...", logging.INFO)
 
-        mainDeviceName = self.config.mainDeviceName()
+        mainDeviceName = self.config.mainRoomName()
         self.mainDevice = None
         self.mainHouseholdDevices = []
         self.status.log('start discovery...')
-        devices = soco.discover(timeout=5)
+        # the scan only runs when multicast finds nothing (seen on the Mac with a VPN interface up)
+        devices = soco.discover(timeout=5, allow_network_scan=True)
         self.status.log('done with discovery...')
         if not devices:
             self.status.log("No Sonos devices found.", logging.WARNING)
@@ -131,6 +137,14 @@ class WPSoco:
                 return
 
         self.status.log(f"Device '{mainDeviceName}' not found.", logging.WARNING)
+        # the room picked on the screen may have been renamed or unplugged; the config's main still works
+        configMain = self.config.mainDeviceName()
+        if configMain != mainDeviceName:
+            for device in devices:
+                if device.player_name == configMain:
+                    self.mainDevice = device
+                    self.status.log(f"Using the config's main room '{configMain}' instead", logging.INFO)
+                    return
 
     def listHouseholdDevices(self):
         self.status.logSilent("-----Devices on main household-----")
@@ -209,9 +223,7 @@ class WPSoco:
 
         # get all speakers attached to main device group
         deviceStr = ""
-        devSet = set()
-        for dev in self.mainDevice.group:
-            devSet.add(dev.player_name)
+        devSet = self.mainGroupNames()
 
         if len(devSet) > 1:
             deviceStr = f"{self.mainDevice.player_name} [+{str(len(devSet)-1)}]"
@@ -219,6 +231,7 @@ class WPSoco:
             deviceStr = self.mainDevice.player_name
 
         self.status.logSilent(f"current device group:{deviceStr}")
+        self.fetchRooms()
 
         try:
             currentVolume = self.mainCoordinator().volume
@@ -240,6 +253,31 @@ class WPSoco:
         except Exception as e:
             self.status.log(f"Error fetching state: {e}", logging.ERROR)
             return False
+
+    # every visible room (stereo pairs count once; subs and surrounds are hidden), from soco's cached group topology
+    def fetchRooms(self):
+        self.status.roomsRefreshRequested = False
+        try:
+            members = self.mainGroupNames()
+            names = sorted(zone.player_name for zone in self.mainDevice.visible_zones)
+            self.status.setRooms(self.mainDevice.player_name, [(name, name in members) for name in names])
+        except Exception as e:
+            self.status.log(f"Error fetching rooms: {e}", logging.ERROR)
+
+    # rooms in the main room's group, with our own recent changes applied for groupChangeSettle seconds.
+    # held the whole time, not just until the speakers agree: soco shares one topology cache for the household,
+    # so a fresh answer from the changed room can be followed by a stale one from the main room
+    def mainGroupNames(self):
+        members = {dev.player_name for dev in self.mainDevice.group}
+        now = time.monotonic()
+        for room, (inGroup, until) in list(self.expectedRooms.items()):
+            if now > until:
+                self.expectedRooms.pop(room, None)
+            elif inGroup:
+                members.add(room)
+            else:
+                members.discard(room)
+        return members
 
     def fetchFavs(self):
         self.lastFavsFetchTime = time.time()
@@ -447,6 +485,10 @@ class WPSoco:
             if self.sub is not None and self.status.appState == WpAppState.CONNECTED:
                 self.checkSubscription()
             self.checkFavsRefresh(favsRefreshTime)
+            if self.status.roomsRefreshRequested and self.status.appState == WpAppState.CONNECTED:
+                self.fetchRooms()
+            if self.status.mainRoomRequested and self.status.appState == WpAppState.CONNECTED:
+                self.switchMainRoom(self.status.mainRoomRequested)
 
             # If we think we have a connection, let's ping and make sure it's still there
             if self.status.appState == WpAppState.CONNECTED and doCheckConnection:
@@ -510,6 +552,10 @@ class WPSoco:
         if kwargs.get('control') == 'play_fav' and 'fav' in params:
             startingFav = (params['fav'].title, params['fav'])
         self.queueCommand(self.runContentCommand, kwargs, startingFav)
+
+    def handleRoomEvent(self, **kwargs):
+        self.status.roomPending = kwargs.get('room')
+        self.queueCommand(self.runRoomCommand, kwargs)
 
     def queueCommand(self, run, kwargs, startingFav=None):
         self.status.commandQueued(startingFav)
@@ -624,6 +670,77 @@ class WPSoco:
 
     # play mode comes with the transport events (NORMAL, SHUFFLE, SHUFFLE_NOREPEAT, REPEAT_ALL...), so knowing
     # whether shuffle is on costs no extra speaker call
+    # join: the room joins the main room's group, which keeps playing what it was (the main room leads).
+    # otherwise the room leaves and plays on its own.
+    def runRoomCommand(self, room, join):
+        try:
+            if self.status.appState != WpAppState.CONNECTED or self.mainDevice is None:
+                return
+            started = time.monotonic()
+            device = self.timedCall('room lookup', lambda: self.roomDevice(room))
+            if join:
+                coordinator = self.timedCall('coordinator lookup', self.mainCoordinator)
+                self.timedCall(f'join {room}', lambda: device.join(coordinator))
+            else:
+                self.timedCall(f'unjoin {room}', device.unjoin)
+            if not self.timedCall('wait for group change', lambda: self.waitForGroupChange(device, join)):
+                raise RuntimeError(f"{room} didn't change within {self.groupChangeWait}s")
+            self.expectedRooms[room] = (join, time.monotonic() + self.groupChangeSettle)
+            self.fetchState()       # the [+n] next to the room name, and the rooms screen
+            self.logTiming(f"{'join' if join else 'unjoin'} {room} total", started)
+        except Exception as e:
+            self.status.log(f"Couldn't {'add' if join else 'remove'} {room}: {e}", logging.ERROR)
+            self.status.roomFailed(f"Couldn't {'add' if join else 'remove'} {room}")
+        finally:
+            self.status.roomPending = None
+
+    # runs on this thread rather than the command thread because it swaps the event subscription the loop reads.
+    # the new main room keeps whatever group it's in; it's remembered for the next start (room_state.json)
+    def switchMainRoom(self, room):
+        self.status.mainRoomRequested = None
+        try:
+            device = self.roomDevice(room)
+            try:
+                self.sub.unsubscribe()
+            except Exception:
+                pass
+            self.sub = None
+            self.mainDevice = device
+            self.groupId = None
+            self.expectedRooms.clear()
+            self.status.shuffle = None
+            self.subscribe()
+            self.fetchState()
+            self.status.requestVolumeRead()
+            self.config.saveState('main_room', room)
+            self.status.log(f"Main room is now '{room}'", logging.INFO)
+        except Exception as e:
+            self.status.log(f"Couldn't make {room} the main room: {e}", logging.ERROR)
+            self.status.roomFailed(f"Couldn't make {room} main")
+            if self.sub is None:
+                # the old subscription is gone too; the reconnect loop starts over from the remembered room
+                self.status.updateAppState(WpAppState.NO_CONNECTION)
+        finally:
+            self.status.roomPending = None
+
+    def roomDevice(self, name):
+        for zone in self.mainDevice.visible_zones:
+            if zone.player_name == name:
+                return zone
+        raise RuntimeError(f"room '{name}' not found")
+
+    # asks the room itself: it knows straight away, while the other speakers (the main one too) took up to ~20s
+    def waitForGroupChange(self, device, join):
+        mainName = self.mainDevice.player_name
+        end = time.monotonic() + self.groupChangeWait
+        while time.monotonic() < end:
+            device.zone_group_state.clear_cache()
+            members = {dev.player_name for dev in device.group.members}     # polls through `device`
+            if (mainName in members) == join:
+                return True
+            time.sleep(0.3)
+        return False
+
     def noteShuffle(self, event):
         mode = event.variables.get('current_play_mode')
         if mode:

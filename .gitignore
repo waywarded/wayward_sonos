@@ -39,3 +39,5 @@ logs/screen.png
 logs/*.lock
 # Sonos cloud sign-in tokens
 sonos_tokens.json
+# main room picked on the screen
+room_state.json

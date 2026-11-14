@@ -22,7 +22,7 @@ layout:
 
   artist_font_size: 28
   artist_font_asset: 'assets/PublicSans-Medium.ttf'
-  artist_text_y: 575
+  artist_text_y: 566
   artist_text_width: 480
   artist_text_color: [255,255,255]
   artist_text_alpha: 255
@@ -31,7 +31,7 @@ layout:
 
   album_font_size: 28
   album_font_asset: 'assets/PublicSans-MediumItalic.ttf'
-  album_text_y: 610
+  album_text_y: 598
   album_text_width: 480
   album_text_color: [255,255,255]
   album_text_alpha: 255
@@ -88,23 +88,29 @@ layout:
   next_button_size: [30, 30]
   prev_button_size: [30, 30]
 
-  play_button_pos: [340, 640]
+  # bottom row, left to right: shuffle, favorites, play/pause, volume, group. pos is the top-left corner;
+  # the outer pairs follow the curve of the circle, play sits level with its neighbours
+  play_button_pos: [330, 634]
   play_button_asset: "assets/PlayBtn.png"
-  play_button_size: [45, 45]
+  play_button_size: [60, 60]
   pause_button_asset: "assets/PauseBtn.png"
 
-  favs_button_pos: [230, 645]
+  favs_button_pos: [263, 649]
   favs_button_size: [30, 30]
   favs_button_asset: "assets/FavsBtn.png"
 
+  group_button_pos: [503, 618]
+  group_button_size: [30, 30]
+  group_button_asset: "assets/SpeakerGroup.png"
+
   # bright when shuffle is on, dim when off; hidden for line-in
-  shuffle_button_pos: [62, 410]
+  shuffle_button_pos: [188, 618]
   shuffle_button_size: [30, 30]
   shuffle_button_asset: "assets/ShuffleBtn.png"
   shuffle_off_alpha: 90
 
   # press and hold for the volume dial
-  volume_button_pos: [450, 645]
+  volume_button_pos: [427, 649]
   volume_button_size: [30, 30]
   volume_button_asset: "assets/VolBtn.png"
 
@@ -119,6 +125,24 @@ layout:
   favs_tile_size: 120
   favs_label_font_size: 16
   favs_label_font_asset: 'assets/PublicSans-Medium.ttf'
+  # rooms screen (the group button): a row per speaker, filled when grouped with the main room
+  rooms_row_size: [340, 54]
+  rooms_row_gap: 10
+  rooms_rows: 7
+  rooms_list_center_y: 365
+  rooms_member_color: [40, 90, 140]
+  rooms_other_color: [30, 30, 30]
+  rooms_name_font_size: 24
+  rooms_name_font_asset: 'assets/PublicSans-Medium.ttf'
+  rooms_tag_font_size: 13
+  rooms_tag_font_asset: 'assets/PublicSans-Bold.ttf'
+  # Set main: tap it, then the room to make the main room (remembered in room_state.json)
+  rooms_set_main_pos: [360, 103]     # centre, under the title
+  rooms_set_main_size: [150, 40]
+  rooms_set_main_font_size: 20
+  rooms_set_main_font_asset: 'assets/PublicSans-Medium.ttf'
+  rooms_failure_y: 606          # "Couldn't add ..." message, between the list and the down button
+  rooms_pending_alpha: 110     # a room being added or removed is dimmed until the speakers report it
   # music service badge in the corner of each favorite's art (icons and short names under favorites.services)
   favs_service_badge_size: 30
   favs_service_badge_color: [20, 20, 20]

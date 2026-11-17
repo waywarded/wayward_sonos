@@ -139,6 +139,8 @@ class WPDisplay:
         self.shuffleOnButton = WPDisplayButton(shufflePos, shuffleSize, shuffleAsset, hitPadding=hitPadding)
         self.shuffleOffButton = WPDisplayButton(shufflePos, shuffleSize, shuffleAsset, hitPadding=hitPadding)
         self.shuffleOffButton.button_surface.set_alpha(config.getSubkey('layout', 'shuffle_off_alpha', 90))
+        # fainter than off, so line-in's greyed-out shuffle doesn't read as just "off"
+        self.shuffleOffButton.disabled_surface.set_alpha(config.getSubkey('layout', 'shuffle_disabled_alpha', 35))
 
         # opens the rooms screen (grouping)
         self.groupButton = WPDisplayButton(
@@ -309,12 +311,15 @@ class WPDisplay:
         self.pauseButton.setVisible(playing)
         # dimmed and ignoring taps until the speaker has done what was last asked, so taps can't pile up
         ready = not self.wpStatus.commandsBusy()
-        shuffleOn = bool(self.wpStatus.shuffle)
-        self.shuffleOnButton.setVisible(self.skipButtonsVisible() and shuffleOn)
-        self.shuffleOffButton.setVisible(self.skipButtonsVisible() and not shuffleOn)
+        # line-in has no queue to shuffle: shown greyed out rather than leaving a gap in the row
+        canShuffle = self.skipButtonsVisible()
+        shuffleOn = canShuffle and bool(self.wpStatus.shuffle)
+        self.shuffleOnButton.setVisible(shuffleOn)
+        self.shuffleOffButton.setVisible(show and not shuffleOn)
         for button in (self.nextButton, self.prevButton, self.playButton, self.pauseButton,
                        self.shuffleOnButton, self.shuffleOffButton):
             button.setEnabled(ready)
+        self.shuffleOffButton.setEnabled(ready and canShuffle)
         self.favsButton.setVisible(show)
         self.volumeButton.setVisible(show)
         self.groupButton.setVisible(show)

@@ -108,6 +108,7 @@ layout:
   shuffle_button_size: [30, 30]
   shuffle_button_asset: "assets/ShuffleBtn.png"
   shuffle_off_alpha: 90
+  shuffle_disabled_alpha: 35     # line-in: nothing to shuffle
 
   # press and hold for the volume dial
   volume_button_pos: [427, 649]

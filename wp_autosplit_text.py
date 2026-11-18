@@ -65,6 +65,14 @@ class WpAutoSplitText:
 
         self.isFirst = True
 
+    # from the top of the first line to the bottom of the last
+    def blockHeight(self):
+        if not self.text:
+            return 0
+        if self.requiresSplit:
+            return 2 * self.fontHeight + self.lineSpace
+        return self.fontHeight
+
     # the largest font the text fits in, on one line or two, without truncating
     def pickFont(self):
         self.pyFont = self.baseFont

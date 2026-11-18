@@ -68,7 +68,11 @@ class WPDisplay:
         self.artPosY = config.getSubkey('layout', 'album_art_y', 360)
         # full screen: the art fills the circle in place of the background image, and the text gets a dark band
         self.artFullScreen = config.getSubkey('layout', 'album_art_full_screen', False)
-        self.textBandY = config.getSubkey('layout', 'text_band_y', None)     # [top, bottom], or None for no band
+        # the band's bottom stays put; its top follows the title, so one-line titles get a shorter band
+        self.textBandBottom = config.getSubkey('layout', 'text_band_bottom', None)     # None for no band
+        self.textBandPadding = config.getSubkey('layout', 'text_band_padding', 10)
+        self.textBandTop = None
+        self.trackTextBottom = config.getSubkey('layout', 'track_text_bottom', None)   # None: centred on track_text_y
         self.textBandAlpha = config.getSubkey('layout', 'text_band_alpha', 150)
         self.textBandSurface = None
         # tapping the band fades it and its text out, to see the whole cover, and back in
@@ -314,12 +318,12 @@ class WPDisplay:
             self.textLayer.fill((0, 0, 0, 0))
             target = self.textLayer
 
-        if self.textBandY:
-            top, bottom = self.textBandY
-            if self.textBandSurface is None:
-                self.textBandSurface = pygame.Surface((self.screenSize, bottom - top), pygame.SRCALPHA)
+        if self.textBandBottom is not None:
+            height = self.textBandBottom - self.textBandTop
+            if self.textBandSurface is None or self.textBandSurface.get_height() != height:
+                self.textBandSurface = pygame.Surface((self.screenSize, height), pygame.SRCALPHA)
                 self.textBandSurface.fill((0, 0, 0, self.textBandAlpha))
-            target.blit(self.textBandSurface, (0, top))
+            target.blit(self.textBandSurface, (0, self.textBandTop))
         for item in textItems:
             item.render(target)
 
@@ -328,8 +332,16 @@ class WPDisplay:
             self.screen.blit(self.textLayer, (0, 0))
 
     def textBandTapped(self, position):
-        return (self.textBandY is not None and self.buttonsVisible()
-                and self.textBandY[0] <= position[1] <= self.textBandY[1])
+        return (self.textBandBottom is not None and self.textBandTop is not None and self.buttonsVisible()
+                and self.textBandTop <= position[1] <= self.textBandBottom)
+
+    # one or two lines of title sit on track_text_bottom, so the artist and album under it never move
+    def placeTitle(self):
+        item = self.trackTextItem
+        height = item.blockHeight()
+        if self.trackTextBottom is not None:
+            item.posCenter = (item.posCenter[0], self.trackTextBottom - height // 2)
+        self.textBandTop = item.posCenter[1] - height // 2 - self.textBandPadding
 
     def renderTrackInfoStreaming(self,trackInfo, deltaTime):
         if trackInfo.album_art_url != self.trackArtUrl:
@@ -341,6 +353,7 @@ class WPDisplay:
         self.artistTextItem.setText(trackInfo.artist)
         self.albumTextItem.setText(trackInfo.album)
         self.albumTextItem.setScrollMode('scrolling')
+        self.placeTitle()
         
         self.speakerTextItem.setText(trackInfo.device_string)
         self.speakerTextItem.setScrollMode('truncate')
@@ -407,6 +420,7 @@ class WPDisplay:
         self.renderTrackArt()
 
         self.trackTextItem.setText(self.lineInTrackName)
+        self.placeTitle()
         self.trackTextItem.update(deltaTime)
         self.renderTextBand(deltaTime, (self.trackTextItem,))
         self.speakerTextItem.setText(trackInfo.device_string)

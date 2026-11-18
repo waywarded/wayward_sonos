@@ -94,7 +94,8 @@ layout:
 
   # extra tap area around small buttons (art size unchanged)
   button_hit_padding: 20
-  # a see-through dark disc behind each now-playing button, so they show on bright covers (alpha 0 for none)
+  skip_button_hit_padding: 35     # prev/next: about 100px square to tap
+  # a see-through dark disc behind each now-playing button except prev/next, so they show on bright covers (alpha 0 for none)
   button_backdrop_alpha: 120
   button_backdrop_padding: 13
 

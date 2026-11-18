@@ -118,19 +118,21 @@ class WPDisplay:
         self.wpStatus.log("Pygame initialized", logging.INFO)
 
         hitPadding = config.getSubkey('layout', 'button_hit_padding', 20)
+        # prev/next are thin arrows out at the edge: a bigger target than the art suggests
+        skipHitPadding = config.getSubkey('layout', 'skip_button_hit_padding', hitPadding)
 
         self.nextButton = WPDisplayButton(
             config.getSubkey('layout', 'next_button_pos', [600, 320]),
             config.getSubkey('layout', 'next_button_size', [60, 60]),
             config.getSubkey('layout', 'next_button_asset', 'assets/NextTrackBtn.png'),
-            hitPadding=hitPadding
+            hitPadding=skipHitPadding
         )
 
         self.prevButton = WPDisplayButton(
             config.getSubkey('layout', 'prev_button_pos', [540, 320]),
             config.getSubkey('layout', 'prev_button_size', [30, 30]),
             config.getSubkey('layout', 'prev_button_asset', 'assets/PrevTrackBtn.png'),
-            hitPadding=hitPadding
+            hitPadding=skipHitPadding
         )
 
         self.playButton = WPDisplayButton(
@@ -183,7 +185,7 @@ class WPDisplay:
         backdropAlpha = config.getSubkey('layout', 'button_backdrop_alpha', 0)
         if backdropAlpha:
             backdropPadding = config.getSubkey('layout', 'button_backdrop_padding', 10)
-            for button in (self.nextButton, self.prevButton, self.playButton, self.pauseButton, self.favsButton,
+            for button in (self.playButton, self.pauseButton, self.favsButton,
                            self.volumeButton, self.shuffleOnButton, self.shuffleOffButton, self.groupButton):
                 button.setBackdrop(backdropPadding, backdropAlpha)
 

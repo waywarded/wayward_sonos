@@ -30,6 +30,8 @@ class WPDisplay:
         self.config = config
         self.screenSize = config.getSubkey('display', 'screen_size', 720)
         self.bgImagePath = config.getSubkey('display', 'background_image', 'assets/background.png')
+        # the background's horizon line (in screen pixels, unshifted); the image is moved so it lines up with the art's bottom
+        self.bgHorizonY = config.getSubkey('display', 'background_horizon_y', 538)
         self.displayState = WpDisplayState.INFO
         self.roundMask = roundMask
         self.roundMaskSurface = None
@@ -198,7 +200,12 @@ class WPDisplay:
         lineSpace = self.config.getSubkey('layout', f'{itemName}_line_space', 5)
         itemAlpha = self.config.getSubkey('layout', f'{itemName}_text_alpha', 255)
 
-        item = WpAutoSplitText(self.config, self, font, (centerX, centerY), textWidth, doShadow, doStrip, lineSpace = lineSpace)
+        # optional larger sizes, largest first: the biggest that fits in two lines without cutting the text is used
+        fontName = self.config.getSubkey('layout', f'{itemName}_font_asset', 'assets/PublicSans-Medium.ttf')
+        fitSizes = self.config.getSubkey('layout', f'{itemName}_font_sizes', [])
+        fitFonts = [pygame.font.Font(fontName, size) for size in fitSizes]
+
+        item = WpAutoSplitText(self.config, self, font, (centerX, centerY), textWidth, doShadow, doStrip, lineSpace = lineSpace, fitFonts = fitFonts)
         # item = WPMarqueeText(self.config, self, font, (centerX, centerY), textWidth, doShadow, doStrip)
         # item.setAlpha(itemAlpha)
         return item        
@@ -235,7 +242,7 @@ class WPDisplay:
                 self.lineInImage = pygame.image.load(self.lineInImagePath)
 
             if self.lineInImage:
-                self.trackArtSurface = pygame.transform.scale(self.lineInImage, (self.screenSize/2, self.screenSize/2))
+                self.trackArtSurface = pygame.transform.scale(self.lineInImage, (self.artSize, self.artSize))
                 self.trackArtUrl = self.lineInImagePath
                 self.wpStatus.logSilent(f"Loaded album art from {self.trackArtUrl}", logging.INFO)
             else:
@@ -348,7 +355,7 @@ class WPDisplay:
             self.fetchLineInArt()
 
         if self.trackArtSurface:
-            self.screen.blit(self.trackArtSurface, (self.screenSize/4, self.screenSize/4))  # Draw album art
+            self.screen.blit(self.trackArtSurface, (self.screenSize//2 - self.artSize//2, self.artPosY - self.artSize//2))
 
         self.trackTextItem.setText(self.lineInTrackName)
         self.trackTextItem.update(deltaTime)
@@ -417,7 +424,10 @@ class WPDisplay:
         self.updateButtonVisibility()
 
         if self.bgImage:
-            self.screen.blit(self.bgImage, (0, 0))  # Draw background image
+            # below the shifted image the reflection has faded to near black
+            bgOffsetY = self.artPosY + self.artSize//2 - self.bgHorizonY
+            self.screen.fill((0, 0, 0))
+            self.screen.blit(self.bgImage, (0, bgOffsetY))
         else:
             self.screen.fill((128, 128, 128)) 
 

@@ -2,11 +2,13 @@ import pygame
 import re
 
 class WpAutoSplitText:
-    def __init__(self, config, parent, pyFont, positionCenter, width, shadow = False, stripParens = False, lineSpace = 3):
+    def __init__(self, config, parent, pyFont, positionCenter, width, shadow = False, stripParens = False, lineSpace = 3, fitFonts = None):
         self.config = config
         self.parent = parent
         self.text = ""
         self.pyFont = pyFont
+        self.baseFont = pyFont
+        self.fitFonts = fitFonts or []      # larger fonts, largest first, tried before pyFont
         self.fontHeight = pyFont.get_height()
         self.widthPx = width
         self.posCenter = positionCenter
@@ -50,6 +52,7 @@ class WpAutoSplitText:
         if self.doStrip:
             self.text = self.doStripParens(self.text)
 
+        self.pickFont()
         self.checkWrap()
 
         if self.line1Text:
@@ -61,6 +64,24 @@ class WpAutoSplitText:
             self.line2ShadowSurf = self.pyFont.render(self.line2Text, True, self.textShadowColor, None) if self.doShadow else None
 
         self.isFirst = True
+
+    # the largest font the text fits in, on one line or two, without truncating
+    def pickFont(self):
+        self.pyFont = self.baseFont
+        for font in self.fitFonts:
+            if self.fits(font, self.text):
+                self.pyFont = font
+                break
+        self.fontHeight = self.pyFont.get_height()
+
+    def fits(self, font, text):
+        if font.size(text)[0] < self.widthPx:
+            return True
+        words = text.split()
+        for i in range(1, len(words)):
+            if font.size(' '.join(words[:i]))[0] <= self.widthPx and font.size(' '.join(words[i:]))[0] <= self.widthPx:
+                return True
+        return False
 
     def checkWrap(self):
         # look at self.text and determine (a) if it needs to wrap, and (b) if so, do apply an optimal wrap.
@@ -89,8 +110,11 @@ class WpAutoSplitText:
         suffix = '...'
         self.requiresSplit = True
 
-        while truncatedText and self.pyFont.size(truncatedText + suffix)[0] > (2*self.widthPx):
-            truncatedText = truncatedText[:-1]
+        # cut until there's a split that fits both lines, so the split below always finds one
+        if not self.fits(self.pyFont, truncatedText):
+            while truncatedText and not self.fits(self.pyFont, truncatedText.rstrip() + suffix):
+                truncatedText = truncatedText[:-1]
+            truncatedText = truncatedText.rstrip() + suffix
 
         # Now search for a balance split (on word boundaries)
         words = truncatedText.split()

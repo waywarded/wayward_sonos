@@ -2,6 +2,7 @@ display:
   screen_size: 720
   fallback_font_size: 24
   background_image: "assets/background01.png"
+  background_horizon_y: 538     # where the image's horizon falls on screen; it's shifted to sit at the art's bottom
   text_color: [255, 255, 255]
   text_shadow_color: [0, 0, 0]
   text_shadow_offset: [2, 2]
@@ -10,37 +11,40 @@ display:
 
 
 layout:
-  track_font_size: 42
+  # the title sits across the widest part of the circle, under the art; the largest of track_font_sizes it fits
+  # in (two lines, uncut) is used, else track_font_size with the text cut short
+  track_font_size: 48
+  track_font_sizes: [72, 64, 58, 52]
   track_text_color: [255,255,255]
   track_text_alpha: 255
   track_font_asset: "assets/PublicSans-Bold.ttf"
-  track_text_y: 120
-  track_text_width: 480
+  track_text_y: 408
+  track_text_width: 640
   track_text_shadow: true
   track_strip_parens: true
   track_line_space: -5
 
-  artist_font_size: 28
+  artist_font_size: 36
   artist_font_asset: 'assets/PublicSans-Medium.ttf'
-  artist_text_y: 566
-  artist_text_width: 480
+  artist_text_y: 515
+  artist_text_width: 580
   artist_text_color: [255,255,255]
   artist_text_alpha: 255
   artist_text_shadow: true
   artist_strip_parens: true
 
-  album_font_size: 28
+  album_font_size: 22
   album_font_asset: 'assets/PublicSans-MediumItalic.ttf'
-  album_text_y: 598
-  album_text_width: 480
+  album_text_y: 550
+  album_text_width: 540
   album_text_color: [255,255,255]
-  album_text_alpha: 255
+  album_text_alpha: 160
   album_text_shadow: true
   album_strip_parens: true
 
   speaker_font_size: 14
   speaker_font_asset: 'assets/PublicSans-Medium.ttf'
-  speaker_text_y: 50
+  speaker_text_y: 40
   speaker_text_width: 300
   speaker_text_color: [255,255,255]
   speaker_text_alpha: 120
@@ -56,8 +60,8 @@ layout:
   status_text_shadow: true
   status_strip_parens: false
 
-  album_art_size: 360
-  album_art_y: 360
+  album_art_size: 260
+  album_art_y: 192
 
   ui_header_font_size: 24
   ui_header_font_asset: 'assets/PublicSans-Bold.ttf'
@@ -69,7 +73,7 @@ layout:
   connecting_detail_font_asset: 'assets/PublicSans-Medium.ttf'
   connecting_detail_color: [190, 190, 190]
 
-  play_state_y: 520
+  play_state_y: 586
 
   # extra tap area around small buttons (art size unchanged)
   button_hit_padding: 20
@@ -88,8 +92,8 @@ layout:
   volume_dial_label_font_size: 22
   volume_dial_label_font_asset: 'assets/PublicSans-Medium.ttf'
 
-  next_button_pos: [650, 320]
-  prev_button_pos: [50, 320]
+  next_button_pos: [560, 177]     # either side of the art
+  prev_button_pos: [130, 177]
   next_button_asset: "assets/NextTrackBtn.png"
   prev_button_asset: "assets/PrevTrackBtn.png"
   next_button_size: [30, 30]

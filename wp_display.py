@@ -66,6 +66,11 @@ class WPDisplay:
 
         self.artSize = config.getSubkey('layout', 'album_art_size',360)
         self.artPosY = config.getSubkey('layout', 'album_art_y', 360)
+        # full screen: the art fills the circle in place of the background image, and the text gets a dark band
+        self.artFullScreen = config.getSubkey('layout', 'album_art_full_screen', False)
+        self.textBandY = config.getSubkey('layout', 'text_band_y', None)     # [top, bottom], or None for no band
+        self.textBandAlpha = config.getSubkey('layout', 'text_band_alpha', 150)
+        self.textBandSurface = None
 
         self.trackFont = self.getFontForElement('track')
         # self.trackTextItem = self.createMarqueeForElement('track', self.trackFont)
@@ -242,7 +247,7 @@ class WPDisplay:
                 self.lineInImage = pygame.image.load(self.lineInImagePath)
 
             if self.lineInImage:
-                self.trackArtSurface = pygame.transform.scale(self.lineInImage, (self.artSize, self.artSize))
+                self.trackArtSurface = self.scaleArt(self.lineInImage)
                 self.trackArtUrl = self.lineInImagePath
                 self.wpStatus.logSilent(f"Loaded album art from {self.trackArtUrl}", logging.INFO)
             else:
@@ -261,14 +266,13 @@ class WPDisplay:
             return
 
         self.wpStatus.updateStatus("Loading album art...")
-        artSize = self.config.getSubkey('layout', 'album_art_size', self.screenSize//2 )
 
         try:
             response = requests.get(artUrl)
             response.raise_for_status()  # Check if the request was successful
             imageFile = BytesIO(response.content)
             albumArtImage = pygame.image.load(imageFile)
-            self.trackArtSurface = pygame.transform.scale(albumArtImage, (artSize, artSize))
+            self.trackArtSurface = self.scaleArt(albumArtImage)
             self.wpStatus.logSilent(f"Loaded album art from {artUrl}", logging.INFO)
             self.trackArtUrl = artUrl
         except Exception as e:
@@ -276,14 +280,32 @@ class WPDisplay:
             self.wpStatus.log(f"Failed to load album art from {artUrl}: {e}", logging.ERROR)
             self.trackArtUrl = None
 
+    def scaleArt(self, image):
+        if self.artFullScreen:
+            return pygame.transform.smoothscale(image.convert(), (self.screenSize, self.screenSize))
+        return pygame.transform.scale(image, (self.artSize, self.artSize))
+
+    def renderTrackArt(self):
+        if self.trackArtSurface:
+            if self.artFullScreen:
+                self.screen.blit(self.trackArtSurface, (0, 0))
+            else:
+                posX = (self.screenSize//2 - self.artSize//2)
+                posY = (self.artPosY - self.artSize//2)
+                self.screen.blit(self.trackArtSurface, (posX, posY))
+
+        if self.textBandY:
+            top, bottom = self.textBandY
+            if self.textBandSurface is None:
+                self.textBandSurface = pygame.Surface((self.screenSize, bottom - top), pygame.SRCALPHA)
+                self.textBandSurface.fill((0, 0, 0, self.textBandAlpha))
+            self.screen.blit(self.textBandSurface, (0, top))
+
     def renderTrackInfoStreaming(self,trackInfo, deltaTime):
         if trackInfo.album_art_url != self.trackArtUrl:
             self.fetchAlbumArt(trackInfo.album_art_url)
-        
-        if self.trackArtSurface:
-            posX = (self.screenSize//2 - self.artSize//2)
-            posY = (self.artPosY - self.artSize//2)
-            self.screen.blit(self.trackArtSurface, (posX, posY))  # Draw album art
+
+        self.renderTrackArt()
 
         self.trackTextItem.setText(trackInfo.title)
         self.artistTextItem.setText(trackInfo.artist)
@@ -354,8 +376,7 @@ class WPDisplay:
         if self.trackArtUrl != self.lineInImagePath:
             self.fetchLineInArt()
 
-        if self.trackArtSurface:
-            self.screen.blit(self.trackArtSurface, (self.screenSize//2 - self.artSize//2, self.artPosY - self.artSize//2))
+        self.renderTrackArt()
 
         self.trackTextItem.setText(self.lineInTrackName)
         self.trackTextItem.update(deltaTime)
@@ -425,7 +446,7 @@ class WPDisplay:
 
         if self.bgImage:
             # below the shifted image the reflection has faded to near black
-            bgOffsetY = self.artPosY + self.artSize//2 - self.bgHorizonY
+            bgOffsetY = 0 if self.artFullScreen else self.artPosY + self.artSize//2 - self.bgHorizonY
             self.screen.fill((0, 0, 0))
             self.screen.blit(self.bgImage, (0, bgOffsetY))
         else:

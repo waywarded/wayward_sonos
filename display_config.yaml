@@ -13,8 +13,8 @@ display:
 layout:
   # the title sits across the widest part of the circle, under the art; the largest of track_font_sizes it fits
   # in (two lines, uncut) is used, else track_font_size with the text cut short
-  track_font_size: 48
-  track_font_sizes: [72, 64, 58, 52]
+  track_font_size: 42
+  track_font_sizes: [64, 58, 52, 46]
   track_text_color: [255,255,255]
   track_text_alpha: 255
   track_font_asset: "assets/PublicSans-Bold.ttf"
@@ -60,8 +60,16 @@ layout:
   status_text_shadow: true
   status_strip_parens: false
 
+  # album_art_full_screen: the art fills the circle (cropped by it) in place of the background image.
+  # false: a square of album_art_size centred at album_art_y, over the background
+  album_art_full_screen: true
   album_art_size: 260
   album_art_y: 192
+  # a see-through black band across the screen behind the title, artist and album: [top, bottom]
+  text_band_y: [325, 566]
+  text_band_alpha: 100
+  # the spinner and the favorite being started, on top of everything
+  command_feedback_y: 360
 
   ui_header_font_size: 24
   ui_header_font_asset: 'assets/PublicSans-Bold.ttf'

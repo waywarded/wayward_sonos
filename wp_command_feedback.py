@@ -14,7 +14,7 @@ class WpCommandFeedback:
         self.parent = parent
 
         size = parent.screenSize
-        self.center = (size // 2, config.getSubkey('layout', 'album_art_y', size // 2))
+        self.center = (size // 2, config.getSubkey('layout', 'command_feedback_y', size // 2))
         dimAlpha = config.getSubkey('layout', 'command_feedback_dim_alpha', 220)
         self.dimSurface = pygame.Surface((size, size), pygame.SRCALPHA)
         self.dimSurface.fill((0, 0, 0, dimAlpha))

@@ -6,7 +6,7 @@ from wp_app_status import WPAppStatus
 from wp_display_button import WPDisplayButton
 from wp_button_label import renderButtonLabel
 from PIL import Image
-from wp_soco import favServiceId, isLibraryFav, LineInFav, ShuffleFav
+from wp_soco import favServiceId, isLibraryFav, isRadioFav, LineInFav, ShuffleFav
 
 class WpFavContentDisplay:
     def __init__(self, config, wpStatus, parent):
@@ -59,18 +59,22 @@ class WpFavContentDisplay:
                 self.shuffleFavs.append(fav)
                 self.shuffleImages[(kind, title)] = self.loadImages(os.path.join(imageDir, folders.get(title, title)))
         self.shuffleArt = {}        # {(kind, title): image} shown until the screen next opens; picked in pickShuffleArt
+        self.fallbackArt = {}       # {favorite title: image} for favorites Sonos has no art for (favorites.fallback_art)
+        for title, path in (config.getSubkey('favorites', 'fallback_art', {}) or {}).items():
+            if os.path.exists(path):
+                self.fallbackArt[title] = Image.open(path).convert('RGB').resize((self.tileSize, self.tileSize))
 
         hitPadding = config.getSubkey('layout', 'button_hit_padding', 20)
         self.prevPageButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_prev_page_pos', [50, 320]),
             config.getSubkey('layout', 'favs_prev_page_size', [30, 30]),
-            config.getSubkey('layout', 'favs_prev_page_asset', 'assets/PrevTrackBtn.png'),
+            config.getSubkey('layout', 'favs_prev_page_asset', 'assets/PagePrevBtn.png'),
             hitPadding=hitPadding
         )
         self.nextPageButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_next_page_pos', [650, 320]),
             config.getSubkey('layout', 'favs_next_page_size', [30, 30]),
-            config.getSubkey('layout', 'favs_next_page_asset', 'assets/NextTrackBtn.png'),
+            config.getSubkey('layout', 'favs_next_page_asset', 'assets/PageNextBtn.png'),
             hitPadding=hitPadding
         )
 
@@ -93,8 +97,11 @@ class WpFavContentDisplay:
             return
         self.favs = self.wpStatus.sonosFavs
         self.artVersion = self.wpStatus.favArt.version
-        self.favList = self.sortByService(list(self.favs.items()))
-        self.favList[0:0] = [(fav.title, fav) for fav in self.shuffleFavs]
+        favs = list(self.favs.items())
+        radio = [(title, fav) for title, fav in favs if isRadioFav(fav)]
+        self.favList = self.sortByService([item for item in favs if item not in radio])
+        # line-in, then radio stations, then the genre and artist shuffles, then the rest
+        self.favList[0:0] = radio + [(fav.title, fav) for fav in self.shuffleFavs]
         if self.lineInFav is not None:
             self.favList.insert(0, (self.lineInFav.title, self.lineInFav))
         self.page = min(self.page, self.pageCount() - 1)
@@ -158,7 +165,7 @@ class WpFavContentDisplay:
             if image is None and fav.kind == 'artist':
                 image = self.wpStatus.favArt.images.get(self.wpStatus.artistArtUris.get(fav.title))
             return image
-        return self.wpStatus.favArt.getImage(fav)
+        return self.wpStatus.favArt.getImage(fav) or self.fallbackArt.get(fav.title)
 
     def loadImages(self, folder):
         if not os.path.isdir(folder):

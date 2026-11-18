@@ -31,13 +31,13 @@ class WpRoomsDisplay:
         self.prevPageButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_prev_page_pos', [50, 320]),
             config.getSubkey('layout', 'favs_prev_page_size', [30, 30]),
-            config.getSubkey('layout', 'favs_prev_page_asset', 'assets/PrevTrackBtn.png'),
+            config.getSubkey('layout', 'favs_prev_page_asset', 'assets/PagePrevBtn.png'),
             hitPadding=hitPadding
         )
         self.nextPageButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_next_page_pos', [650, 320]),
             config.getSubkey('layout', 'favs_next_page_size', [30, 30]),
-            config.getSubkey('layout', 'favs_next_page_asset', 'assets/NextTrackBtn.png'),
+            config.getSubkey('layout', 'favs_next_page_asset', 'assets/PageNextBtn.png'),
             hitPadding=hitPadding
         )
 

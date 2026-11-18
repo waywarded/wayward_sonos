@@ -59,6 +59,9 @@ class WPDisplay:
 
         self.trackArtSurface = None
         self.trackArtUrl = None
+        self.trackArtKey = None     # (art url, favorite) the art was last picked for, so a failed fetch isn't retried every frame
+        # art for favorites that have none of their own (radio streams), by favorite name
+        self.fallbackArt = config.getSubkey('favorites', 'fallback_art', {}) or {}
 
         self.textColor = config.getSubkey("display", "text_color", (255, 255, 255))
         self.textShadowColor = config.getSubkey("display", "text_shadow_color", (0, 0, 0))
@@ -401,9 +404,23 @@ class WPDisplay:
             for button in (self.prevButton, self.nextButton):
                 button.moveCenter((button.rect.centerx, item.posCenter[1]))
 
+    # the track's art, else the playing favorite's fallback_art
+    def pickTrackArt(self, trackInfo):
+        key = (trackInfo.album_art_url, trackInfo.favorite)
+        if key == self.trackArtKey:
+            return
+        self.trackArtKey = key
+        self.fetchAlbumArt(trackInfo.album_art_url)
+        path = self.fallbackArt.get(trackInfo.favorite)
+        if self.trackArtSurface is None and path:
+            try:
+                self.trackArtSurface = self.scaleArt(pygame.image.load(path))
+                self.trackArtUrl = path
+            except Exception as e:
+                self.wpStatus.logSilent(f"Failed to load fallback art {path}: {e}")
+
     def renderTrackInfoStreaming(self,trackInfo, deltaTime):
-        if trackInfo.album_art_url != self.trackArtUrl:
-            self.fetchAlbumArt(trackInfo.album_art_url)
+        self.pickTrackArt(trackInfo)
 
         self.renderTrackArt()
 
@@ -431,6 +448,10 @@ class WPDisplay:
     def skipButtonsVisible(self):
         return self.buttonsVisible() and not self.wpStatus.latestTrackInfo.line_in
 
+    # a radio stream has no tracks to skip or shuffle either: shown greyed out
+    def canSkip(self):
+        return self.skipButtonsVisible() and not self.wpStatus.latestTrackInfo.radio
+
     def updateButtonVisibility(self):
         show = self.buttonsVisible()
         playing = show and self.wpStatus.latestTrackInfo.isPlaying()
@@ -440,8 +461,8 @@ class WPDisplay:
         self.pauseButton.setVisible(playing)
         # dimmed and ignoring taps until the speaker has done what was last asked, so taps can't pile up
         ready = not self.wpStatus.commandsBusy()
-        # line-in has no queue to shuffle: shown greyed out rather than leaving a gap in the row
-        canShuffle = self.skipButtonsVisible()
+        # line-in and radio have no queue to shuffle: shown greyed out rather than leaving a gap in the row
+        canShuffle = self.canSkip()
         shuffleOn = canShuffle and bool(self.wpStatus.shuffle)
         self.shuffleOnButton.setVisible(shuffleOn)
         self.shuffleOffButton.setVisible(show and not shuffleOn)
@@ -449,6 +470,8 @@ class WPDisplay:
                        self.shuffleOnButton, self.shuffleOffButton):
             button.setEnabled(ready)
         self.shuffleOffButton.setEnabled(ready and canShuffle)
+        self.nextButton.setEnabled(ready and canShuffle)
+        self.prevButton.setEnabled(ready and canShuffle)
         self.favsButton.setVisible(show)
         self.volumeButton.setVisible(show)
         self.groupButton.setVisible(show)
@@ -474,6 +497,7 @@ class WPDisplay:
     def renderTrackInfoLineIn(self,trackInfo, deltaTime):
         if self.trackArtUrl != self.lineInImagePath:
             self.fetchLineInArt()
+        self.trackArtKey = None
 
         self.renderTrackArt()
 

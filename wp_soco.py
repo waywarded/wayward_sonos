@@ -10,7 +10,7 @@ import queue
 import random
 import re
 
-from soco.core import DidlPlaylistContainer
+from soco.core import DidlPlaylistContainer, MUSIC_SRC_RADIO
 
 # dev aid: stands in for a Sonos favorite (--fake_favs); no reference, so playing it does nothing
 @dataclass
@@ -52,9 +52,11 @@ class NowPlayingInfo:
     transport_state: str = "STOPPED"
     line_in: bool = False
     device_string :str = ""
+    radio: bool = False         # a stream: no tracks to skip
+    favorite: str = ""          # the favorite playing, if any, for favorites.fallback_art
 
     @classmethod
-    def fromTrackInfo(cls, trackInfo, lineIn = False, transportState = 'STOPPED', deviceString = ""):
+    def fromTrackInfo(cls, trackInfo, lineIn = False, transportState = 'STOPPED', deviceString = "", radio = False, favorite = ""):
         return cls(
             title=trackInfo.get("title", "Unknown Title"),
             artist=trackInfo.get("artist", "Unknown Artist"),
@@ -62,7 +64,9 @@ class NowPlayingInfo:
             album_art_url=trackInfo.get("album_art", ""),
             transport_state=transportState,
             line_in = lineIn,
-            device_string=deviceString
+            device_string=deviceString,
+            radio = radio,
+            favorite = favorite
         )
 
     def isPlaying(self):
@@ -81,6 +85,14 @@ def favServiceId(fav):
     except Exception:
         return None
     return int(match.group(1)) if match else None
+
+
+# radio station favorites (internet streams, Sonos Radio): no tracks to skip, listed before the genres
+def isRadioFav(fav):
+    try:
+        return soco.SoCo.music_source_from_uri(fav.get_uri()) == MUSIC_SRC_RADIO
+    except Exception:
+        return False
 
 
 # favorites from the music library on a network (SMB) share: its files (x-file-cifs://server/share/...) and its
@@ -115,6 +127,8 @@ class WPSoco:
         self.maxTracks = {'genre': config.getSubkey('favorites', 'genre_max_tracks', 200),
                           'artist': config.getSubkey('favorites', 'artist_max_tracks', 200)}
         self.shuffleArtists = config.getSubkey('favorites', 'artists', [])
+        self.radioLibraryArt = config.getSubkey('favorites', 'radio_library_art', True)
+        self.radioLookup = (None, None)     # ((artist, title), library track or None), so each song is looked up once
         if config.getSubkey('favorites', 'load_via', 'local') == 'cloud':
             cloud = WPSonosCloud(timeout=config.getSubkey('connection', 'cloud_timeout', 30))
             if cloud.ready():
@@ -263,15 +277,63 @@ class WPSoco:
             self.status.log(
                 f"Current state - Volume: {currentVolume}, Track: {currentTrack.get('title', 'Unknown')}",
                 logging.INFO)
+            uri = currentTrack.get('uri', '') or ''
+            radio = coordinator.music_source_from_uri(uri) == MUSIC_SRC_RADIO
+            if radio and self.radioLibraryArt:
+                self.addLibraryDetails(currentTrack)
             self.status.setTrackInfo(
                 NowPlayingInfo.fromTrackInfo(currentTrack,
                                              lineIn,
                                              transportState,
-                                             deviceString=deviceStr))
+                                             deviceString=deviceStr,
+                                             radio=radio,
+                                             favorite=self.favoriteForUri(uri)))
             return True
         except Exception as e:
             self.status.log(f"Error fetching state: {e}", logging.ERROR)
             return False
+
+    # radio streams send only "artist - title": take the album and its art from the same song in the music
+    # library, if it's there (a station playing from the library, like Subwave via Navidrome)
+    def addLibraryDetails(self, currentTrack):
+        artist = (currentTrack.get('artist') or '').strip()
+        title = (currentTrack.get('title') or '').strip()
+        if not artist or not title:
+            return
+        key, found = self.radioLookup
+        if key != (artist, title):
+            found = self.libraryTrack(artist, title)
+            self.radioLookup = ((artist, title), found)
+        if found is None:
+            return
+        currentTrack['album_art'] = found.album_art_uri
+        if not currentTrack.get('album'):
+            currentTrack['album'] = getattr(found, 'album', '') or ''
+
+    # by the track's own artist rather than the album artist, so compilation tracks are found too
+    def libraryTrack(self, artist, title):
+        try:
+            tracks = self.mainCoordinator().music_library.get_tracks(
+                search_term=title, full_album_art_uri=True, max_items=50)
+        except Exception as e:
+            self.status.logSilent(f"Library lookup for {artist} - {title} failed: {e}", logging.WARNING)
+            return None
+        matches = [t for t in tracks
+                   if (getattr(t, 'creator', '') or '').lower() == artist.lower() and getattr(t, 'album_art_uri', None)]
+        exact = [t for t in matches if t.title.lower() == title.lower()]
+        found = (exact or matches or [None])[0]
+        self.status.logSilent(f"Library art for {artist} - {title}: {found.album_art_uri if found else 'not found'}")
+        return found
+
+    # the favorite whose link is the one playing (radio streams play their favorite's link as is)
+    def favoriteForUri(self, uri):
+        if not uri:
+            return ""
+        for title, fav in self.status.sonosFavs.items():
+            resources = getattr(fav, 'resources', None)
+            if resources and resources[0].uri == uri:
+                return title
+        return ""
 
     # every visible room (stereo pairs count once; subs and surrounds are hidden), from soco's cached group topology
     def fetchRooms(self):

@@ -183,6 +183,9 @@ layout:
   favs_service_badge_color: [20, 20, 20]
   favs_service_badge_font_size: 12
   favs_service_badge_font_asset: 'assets/PublicSans-Bold.ttf'
+  # paging arrows on the favorites and rooms screens (chevrons, so they don't read as track skip)
+  favs_prev_page_asset: 'assets/PagePrevBtn.png'
+  favs_next_page_asset: 'assets/PageNextBtn.png'
 
 
 deck:
@@ -230,3 +233,10 @@ favorites:
   library_icon: 'assets/Network.png'
   sonos_playlist_icon: 'assets/Sonos.png'
   unknown_service_icon: 'assets/UnknownService.png'
+  # art for favorites Sonos has none for (radio streams), by favorite name: used on the tile and on the
+  # now-playing screen while that favorite plays
+  fallback_art:
+    'Home Radio': 'assets/HomeRadio.png'
+  # radio streams only send "artist - title": look the song up in the music library for its album and art
+  # (fallback_art when it isn't there, e.g. while the DJ talks)
+  radio_library_art: true

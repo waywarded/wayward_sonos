@@ -127,7 +127,9 @@ class WPMarqueeText:
         clipRect = pygame.Rect(x,y,self.widthPx,self.fontHeight)
 
         screen.set_clip(clipRect)
-
+        self.textSurf.set_alpha(self.alpha)
+        if self.shadowSurf:
+            self.shadowSurf.set_alpha(self.alpha)
 
         if self.shadow and self.shadowSurf:
             screen.blit(self.shadowSurf, (x-self.curOffset + self.textShadowOffset[0], y + self.textShadowOffset[1]))

@@ -13,6 +13,14 @@ class WPDisplayButton:
         self.disabled_surface.set_alpha(80)
         self.visible = True
         self.enabled = True
+        self.backdrop = None        # a dark disc drawn centred under the button
+
+    # a see-through dark disc behind the button, so it shows up on any album art
+    def setBackdrop(self, padding, alpha):
+        radius = max(self.rect.width, self.rect.height) // 2 + padding
+        surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+        pygame.draw.circle(surf, (0, 0, 0, alpha), (radius, radius), radius)
+        self.backdrop = surf
 
     # for buttons placed by their centre (the rooms screen's Set main)
     def moveCenter(self, center):
@@ -28,6 +36,8 @@ class WPDisplayButton:
 
     def render(self, screen):
         if self.visible:
+            if self.backdrop:
+                screen.blit(self.backdrop, self.backdrop.get_rect(center=self.rect.center))
             screen.blit(self.button_surface if self.enabled else self.disabled_surface, self.rect)
         
 

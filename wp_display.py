@@ -73,6 +73,7 @@ class WPDisplay:
         self.textBandPadding = config.getSubkey('layout', 'text_band_padding', 10)
         self.textBandTop = None
         self.trackTextBottom = config.getSubkey('layout', 'track_text_bottom', None)   # None: centred on track_text_y
+        self.skipButtonsFollowTitle = config.getSubkey('layout', 'skip_buttons_follow_title', False)
         self.textBandAlpha = config.getSubkey('layout', 'text_band_alpha', 150)
         self.textBandSurface = None
         # tapping the band fades it and its text out, to see the whole cover, and back in
@@ -80,6 +81,15 @@ class WPDisplay:
         self.textFade = 1.0         # how much of the band and its text shows, 0 to 1
         self.textFadeTime = config.getSubkey('layout', 'text_fade_time', 0.4)
         self.textLayer = None
+
+        # artist and album take turns in one spot, fading out and back in between
+        self.artistShowTime = config.getSubkey('layout', 'artist_show_time', 8.0)
+        self.albumShowTime = config.getSubkey('layout', 'album_show_time', 4.0)
+        self.artistAlbumFadeTime = config.getSubkey('layout', 'artist_album_fade_time', 0.4)
+        self.artistAlpha = config.getSubkey('layout', 'artist_text_alpha', 255)
+        self.albumAlpha = config.getSubkey('layout', 'album_text_alpha', 255)
+        self.artistAlbumTime = 0.0
+        self.artistAlbumTrack = None    # the track the cycle started on; a new one starts with the artist
 
         self.trackFont = self.getFontForElement('track')
         # self.trackTextItem = self.createMarqueeForElement('track', self.trackFont)
@@ -165,6 +175,13 @@ class WPDisplay:
             config.getSubkey('layout', 'group_button_asset', 'assets/SpeakerGroup.png'),
             hitPadding=hitPadding
         )
+
+        backdropAlpha = config.getSubkey('layout', 'button_backdrop_alpha', 0)
+        if backdropAlpha:
+            backdropPadding = config.getSubkey('layout', 'button_backdrop_padding', 10)
+            for button in (self.nextButton, self.prevButton, self.playButton, self.pauseButton, self.favsButton,
+                           self.volumeButton, self.shuffleOnButton, self.shuffleOffButton, self.groupButton):
+                button.setBackdrop(backdropPadding, backdropAlpha)
 
         self.favsBackButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_back_button_pos', [340, 640]),
@@ -331,6 +348,34 @@ class WPDisplay:
             self.textLayer.set_alpha(int(255 * self.textFade))
             self.screen.blit(self.textLayer, (0, 0))
 
+    # the artist, or the album for album_show_time of each cycle, faded out and in at the swaps
+    def artistOrAlbum(self, trackInfo, deltaTime):
+        track = (trackInfo.title, trackInfo.artist, trackInfo.album)
+        if track != self.artistAlbumTrack:
+            self.artistAlbumTrack = track
+            self.artistAlbumTime = 0.0
+        if not trackInfo.album or trackInfo.album == trackInfo.artist:
+            self.artistTextItem.setAlpha(self.artistAlpha)
+            return self.artistTextItem
+
+        fade = self.artistAlbumFadeTime
+        cycle = self.artistShowTime + self.albumShowTime + 4 * fade
+        self.artistAlbumTime = (self.artistAlbumTime + deltaTime) % cycle
+        t = self.artistAlbumTime
+        albumStart = self.artistShowTime + fade         # artist faded out, album fading in
+        albumEnd = albumStart + fade + self.albumShowTime + fade    # album faded out, artist fading in
+        if albumStart <= t < albumEnd:
+            item, alpha = self.albumTextItem, self.albumAlpha
+            sinceIn, untilOut = t - albumStart, albumEnd - t
+        else:
+            item, alpha = self.artistTextItem, self.artistAlpha
+            sinceIn = t - albumEnd if t >= albumEnd else t + fade   # the first showing starts already faded in
+            untilOut = albumStart - t if t < albumStart else cycle - t + albumStart
+        if fade > 0:
+            alpha = int(alpha * min(1.0, sinceIn / fade, untilOut / fade))
+        item.setAlpha(alpha)
+        return item
+
     def textBandTapped(self, position):
         return (self.textBandBottom is not None and self.textBandTop is not None and self.buttonsVisible()
                 and self.textBandTop <= position[1] <= self.textBandBottom)
@@ -342,6 +387,10 @@ class WPDisplay:
         if self.trackTextBottom is not None:
             item.posCenter = (item.posCenter[0], self.trackTextBottom - height // 2)
         self.textBandTop = item.posCenter[1] - height // 2 - self.textBandPadding
+        # prev/next level with the title's middle: between its lines when it has two
+        if self.skipButtonsFollowTitle:
+            for button in (self.prevButton, self.nextButton):
+                button.moveCenter((button.rect.centerx, item.posCenter[1]))
 
     def renderTrackInfoStreaming(self,trackInfo, deltaTime):
         if trackInfo.album_art_url != self.trackArtUrl:
@@ -363,7 +412,7 @@ class WPDisplay:
         self.albumTextItem.update(deltaTime)
         self.speakerTextItem.update(deltaTime)
 
-        self.renderTextBand(deltaTime, (self.trackTextItem, self.artistTextItem, self.albumTextItem))
+        self.renderTextBand(deltaTime, (self.trackTextItem, self.artistOrAlbum(trackInfo, deltaTime)))
         self.speakerTextItem.render(self.screen)
 
     def buttonsVisible(self):

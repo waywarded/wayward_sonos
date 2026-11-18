@@ -19,27 +19,31 @@ layout:
   track_text_alpha: 255
   track_font_asset: "assets/PublicSans-Bold.ttf"
   track_text_y: 452
-  track_text_bottom: 534     # one or two lines end here, above the artist
-  track_text_width: 640
+  track_text_bottom: 537     # one or two lines end here, above the artist
+  track_text_width: 500      # leaves room for prev/next either side
   track_text_shadow: true
   track_strip_parens: true
   track_line_space: -5
 
   artist_font_size: 36
   artist_font_asset: 'assets/PublicSans-Medium.ttf'
-  artist_text_y: 557
+  # artist and album take turns under the title: each shows for its time, then fades out and the other fades in
+  artist_show_time: 8
+  album_show_time: 4
+  artist_album_fade_time: 0.4
+  artist_text_y: 561
   artist_text_width: 580
   artist_text_color: [255,255,255]
   artist_text_alpha: 255
   artist_text_shadow: true
   artist_strip_parens: true
 
-  album_font_size: 22
+  album_font_size: 36
   album_font_asset: 'assets/PublicSans-MediumItalic.ttf'
-  album_text_y: 592
-  album_text_width: 540
+  album_text_y: 561
+  album_text_width: 580
   album_text_color: [255,255,255]
-  album_text_alpha: 160
+  album_text_alpha: 255
   album_text_shadow: true
   album_strip_parens: true
 
@@ -68,7 +72,7 @@ layout:
   album_art_y: 192
   # a see-through black band across the screen behind the title, artist and album. Its bottom sits just above
   # the controls; its top is text_band_padding above the title, so it's shorter for one-line titles
-  text_band_bottom: 610
+  text_band_bottom: 590
   text_band_padding: 8
   text_band_alpha: 210
   text_fade_time: 0.4      # tap the band: it and its text fade out to show the whole cover; tap again to bring them back
@@ -89,6 +93,9 @@ layout:
 
   # extra tap area around small buttons (art size unchanged)
   button_hit_padding: 20
+  # a see-through dark disc behind each now-playing button, so they show on bright covers (alpha 0 for none)
+  button_backdrop_alpha: 200
+  button_backdrop_padding: 10
 
   # press and hold here (above the song title, around the room name) to get the quit confirm: [x, y, w, h]
   quit_hold_area: [200, 10, 320, 85]
@@ -104,8 +111,10 @@ layout:
   volume_dial_label_font_size: 22
   volume_dial_label_font_asset: 'assets/PublicSans-Medium.ttf'
 
-  next_button_pos: [640, 345]     # half way down, at the edges
-  prev_button_pos: [50, 345]
+  # either side of the title; with skip_buttons_follow_title they move up and down with its middle
+  next_button_pos: [643, 345]
+  prev_button_pos: [47, 345]
+  skip_buttons_follow_title: true
   next_button_asset: "assets/NextTrackBtn.png"
   prev_button_asset: "assets/PrevTrackBtn.png"
   next_button_size: [30, 30]

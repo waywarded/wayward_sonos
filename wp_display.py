@@ -71,6 +71,11 @@ class WPDisplay:
         self.textBandY = config.getSubkey('layout', 'text_band_y', None)     # [top, bottom], or None for no band
         self.textBandAlpha = config.getSubkey('layout', 'text_band_alpha', 150)
         self.textBandSurface = None
+        # tapping the band fades it and its text out, to see the whole cover, and back in
+        self.textHidden = False
+        self.textFade = 1.0         # how much of the band and its text shows, 0 to 1
+        self.textFadeTime = config.getSubkey('layout', 'text_fade_time', 0.4)
+        self.textLayer = None
 
         self.trackFont = self.getFontForElement('track')
         # self.trackTextItem = self.createMarqueeForElement('track', self.trackFont)
@@ -294,12 +299,37 @@ class WPDisplay:
                 posY = (self.artPosY - self.artSize//2)
                 self.screen.blit(self.trackArtSurface, (posX, posY))
 
+    # the band and the text on it; while fading they're drawn to a layer that's blended in whole
+    def renderTextBand(self, deltaTime, textItems):
+        step = deltaTime / self.textFadeTime if self.textFadeTime > 0 else 1.0
+        goal = 0.0 if self.textHidden else 1.0
+        self.textFade = goal if abs(goal - self.textFade) <= step else self.textFade + (step if goal > self.textFade else -step)
+        if self.textFade <= 0:
+            return
+
+        target = self.screen
+        if self.textFade < 1:
+            if self.textLayer is None:
+                self.textLayer = pygame.Surface((self.screenSize, self.screenSize), pygame.SRCALPHA)
+            self.textLayer.fill((0, 0, 0, 0))
+            target = self.textLayer
+
         if self.textBandY:
             top, bottom = self.textBandY
             if self.textBandSurface is None:
                 self.textBandSurface = pygame.Surface((self.screenSize, bottom - top), pygame.SRCALPHA)
                 self.textBandSurface.fill((0, 0, 0, self.textBandAlpha))
-            self.screen.blit(self.textBandSurface, (0, top))
+            target.blit(self.textBandSurface, (0, top))
+        for item in textItems:
+            item.render(target)
+
+        if target is self.textLayer:
+            self.textLayer.set_alpha(int(255 * self.textFade))
+            self.screen.blit(self.textLayer, (0, 0))
+
+    def textBandTapped(self, position):
+        return (self.textBandY is not None and self.buttonsVisible()
+                and self.textBandY[0] <= position[1] <= self.textBandY[1])
 
     def renderTrackInfoStreaming(self,trackInfo, deltaTime):
         if trackInfo.album_art_url != self.trackArtUrl:
@@ -320,9 +350,7 @@ class WPDisplay:
         self.albumTextItem.update(deltaTime)
         self.speakerTextItem.update(deltaTime)
 
-        self.trackTextItem.render(self.screen)        
-        self.artistTextItem.render(self.screen)        
-        self.albumTextItem.render(self.screen)
+        self.renderTextBand(deltaTime, (self.trackTextItem, self.artistTextItem, self.albumTextItem))
         self.speakerTextItem.render(self.screen)
 
     def buttonsVisible(self):
@@ -380,7 +408,7 @@ class WPDisplay:
 
         self.trackTextItem.setText(self.lineInTrackName)
         self.trackTextItem.update(deltaTime)
-        self.trackTextItem.render(self.screen)        
+        self.renderTextBand(deltaTime, (self.trackTextItem,))
         self.speakerTextItem.setText(trackInfo.device_string)
 
         self.speakerTextItem.setScrollMode('truncate')
@@ -633,6 +661,9 @@ class WPDisplay:
             self.commandFeedback.handleTap(position)
             return
         if self.checkButtonTap(position):
+            return
+        if self.textBandTapped(position):
+            self.textHidden = not self.textHidden
             return
         if self.quitHoldRect.collidepoint(position):
             self.quitHoldElapsed = 0.0

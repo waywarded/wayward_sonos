@@ -67,7 +67,8 @@ layout:
   album_art_y: 192
   # a see-through black band across the screen behind the title, artist and album: [top, bottom]
   text_band_y: [325, 566]
-  text_band_alpha: 100
+  text_band_alpha: 210
+  text_fade_time: 0.4      # tap the band: it and its text fade out to show the whole cover; tap again to bring them back
   # the spinner and the favorite being started, on top of everything
   command_feedback_y: 360
 

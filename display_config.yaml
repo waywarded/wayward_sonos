@@ -30,7 +30,7 @@ layout:
   # artist and album take turns under the title: each shows for its time, then fades out and the other fades in
   artist_show_time: 8
   album_show_time: 4
-  artist_album_fade_time: 0.4
+  artist_album_fade_time: 1.0
   artist_text_y: 561
   artist_text_width: 580
   artist_text_color: [255,255,255]
@@ -73,7 +73,8 @@ layout:
   # a see-through black band across the screen behind the title, artist and album. Its bottom sits just above
   # the controls; its top is text_band_padding above the title, so it's shorter for one-line titles
   text_band_bottom: 590
-  text_band_padding: 8
+  text_band_padding: 10
+  text_band_single_line_padding: 8     # one-line titles: this much more room above and below the text
   text_band_alpha: 210
   text_fade_time: 0.4      # tap the band: it and its text fade out to show the whole cover; tap again to bring them back
   # the spinner and the favorite being started, on top of everything
@@ -94,8 +95,8 @@ layout:
   # extra tap area around small buttons (art size unchanged)
   button_hit_padding: 20
   # a see-through dark disc behind each now-playing button, so they show on bright covers (alpha 0 for none)
-  button_backdrop_alpha: 200
-  button_backdrop_padding: 10
+  button_backdrop_alpha: 120
+  button_backdrop_padding: 13
 
   # press and hold here (above the song title, around the room name) to get the quit confirm: [x, y, w, h]
   quit_hold_area: [200, 10, 320, 85]
@@ -124,7 +125,7 @@ layout:
   # the outer pairs follow the curve of the circle, play sits level with its neighbours
   play_button_pos: [330, 634]
   play_button_asset: "assets/PlayBtn.png"
-  play_button_size: [60, 60]
+  play_button_size: [60,60]
   pause_button_asset: "assets/PauseBtn.png"
 
   favs_button_pos: [263, 649]

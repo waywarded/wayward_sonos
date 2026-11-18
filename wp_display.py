@@ -74,6 +74,10 @@ class WPDisplay:
         self.textBandTop = None
         self.trackTextBottom = config.getSubkey('layout', 'track_text_bottom', None)   # None: centred on track_text_y
         self.skipButtonsFollowTitle = config.getSubkey('layout', 'skip_buttons_follow_title', False)
+        # one-line titles: the text moves up this much and the band gains it at the top, so it isn't a thin strip
+        self.textBandSingleLinePadding = config.getSubkey('layout', 'text_band_single_line_padding', 0)
+        self.artistBaseY = config.getSubkey('layout', 'artist_text_y', self.screenSize // 2)
+        self.albumBaseY = config.getSubkey('layout', 'album_text_y', self.screenSize // 2)
         self.textBandAlpha = config.getSubkey('layout', 'text_band_alpha', 150)
         self.textBandSurface = None
         # tapping the band fades it and its text out, to see the whole cover, and back in
@@ -384,9 +388,12 @@ class WPDisplay:
     def placeTitle(self):
         item = self.trackTextItem
         height = item.blockHeight()
+        lift = 0 if item.requiresSplit else self.textBandSingleLinePadding
         if self.trackTextBottom is not None:
-            item.posCenter = (item.posCenter[0], self.trackTextBottom - height // 2)
-        self.textBandTop = item.posCenter[1] - height // 2 - self.textBandPadding
+            item.posCenter = (item.posCenter[0], self.trackTextBottom - lift - height // 2)
+            self.artistTextItem.posCenter = (self.artistTextItem.posCenter[0], self.artistBaseY - lift)
+            self.albumTextItem.posCenter = (self.albumTextItem.posCenter[0], self.albumBaseY - lift)
+        self.textBandTop = item.posCenter[1] - height // 2 - self.textBandPadding - lift
         # prev/next level with the title's middle: between its lines when it has two
         if self.skipButtonsFollowTitle:
             for button in (self.prevButton, self.nextButton):

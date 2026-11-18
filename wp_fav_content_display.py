@@ -1,11 +1,12 @@
 import pygame
 import math
 import os
+import random
 from wp_app_status import WPAppStatus
 from wp_display_button import WPDisplayButton
 from wp_button_label import renderButtonLabel
 from PIL import Image
-from wp_soco import favServiceId, isLibraryFav, LineInFav
+from wp_soco import favServiceId, isLibraryFav, LineInFav, ShuffleFav
 
 class WpFavContentDisplay:
     def __init__(self, config, wpStatus, parent):
@@ -44,6 +45,21 @@ class WpFavContentDisplay:
             if os.path.exists(imagePath):
                 self.lineInImage = Image.open(imagePath).convert('RGB')
 
+        # after the line-in tile: a random shuffle of each genre, then each artist, in the music library.
+        # art comes from its folder in favorites.genre_image_dir / artist_image_dir (named after it unless
+        # genre_folders / artist_folders say otherwise); one image picked at random each time the screen opens.
+        # Without images a genre shows its initials and an artist one of its album covers
+        self.shuffleFavs = []
+        self.shuffleImages = {}     # {(kind, title): [images]}, scaled to the tile once so a folder of photos stays small
+        for kind, default in (('genre', 'assets/genres'), ('artist', 'assets/artists')):
+            imageDir = config.getSubkey('favorites', f'{kind}_image_dir', default)
+            folders = config.getSubkey('favorites', f'{kind}_folders', {})
+            for title in config.getSubkey('favorites', f'{kind}s', []):
+                fav = ShuffleFav(title, kind)
+                self.shuffleFavs.append(fav)
+                self.shuffleImages[(kind, title)] = self.loadImages(os.path.join(imageDir, folders.get(title, title)))
+        self.shuffleArt = {}        # {(kind, title): image} shown until the screen next opens; picked in pickShuffleArt
+
         hitPadding = config.getSubkey('layout', 'button_hit_padding', 20)
         self.prevPageButton = WPDisplayButton(
             config.getSubkey('layout', 'favs_prev_page_pos', [50, 320]),
@@ -63,6 +79,7 @@ class WpFavContentDisplay:
         self.artVersion = -1    # favArt.version the tiles were built with
         self.favList = []       # [(title, fav)] in Sonos order
         self.tiles = []         # [(button, fav)] for the current page
+        self.pickShuffleArt()
 
     def perPage(self):
         return self.columns * self.rows
@@ -77,6 +94,7 @@ class WpFavContentDisplay:
         self.favs = self.wpStatus.sonosFavs
         self.artVersion = self.wpStatus.favArt.version
         self.favList = self.sortByService(list(self.favs.items()))
+        self.favList[0:0] = [(fav.title, fav) for fav in self.shuffleFavs]
         if self.lineInFav is not None:
             self.favList.insert(0, (self.lineInFav.title, self.lineInFav))
         self.page = min(self.page, self.pageCount() - 1)
@@ -84,6 +102,8 @@ class WpFavContentDisplay:
 
     # what a favorite plays from: a service id, 'library' (SMB share) or None (saved Sonos playlists)
     def badgeKey(self, fav):
+        if isinstance(fav, ShuffleFav):
+            return 'library'
         serviceId = favServiceId(fav)
         if serviceId is not None:
             return serviceId
@@ -133,7 +153,27 @@ class WpFavContentDisplay:
     def tileImage(self, fav):
         if isinstance(fav, LineInFav):
             return self.lineInImage
+        if isinstance(fav, ShuffleFav):
+            image = self.shuffleArt.get((fav.kind, fav.title))
+            if image is None and fav.kind == 'artist':
+                image = self.wpStatus.favArt.images.get(self.wpStatus.artistArtUris.get(fav.title))
+            return image
         return self.wpStatus.favArt.getImage(fav)
+
+    def loadImages(self, folder):
+        if not os.path.isdir(folder):
+            return []
+        images = []
+        for name in sorted(os.listdir(folder)):
+            if name.lower().endswith(('.png', '.jpg', '.jpeg')):
+                images.append(Image.open(os.path.join(folder, name)).convert('RGB').resize((self.tileSize, self.tileSize)))
+        return images
+
+    # called when the favorites screen opens, so a tile with several images shows a different one each time
+    def pickShuffleArt(self):
+        self.shuffleArt = {key: random.choice(images) for key, images in self.shuffleImages.items() if images}
+        if self.favs is not None:
+            self.setupDisplay()
 
     # art square (or initials until the art arrives) with the name underneath; the whole tile is tappable
     def makeTileSurface(self, title, image=None):

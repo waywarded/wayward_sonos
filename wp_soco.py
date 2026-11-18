@@ -7,6 +7,7 @@ import threading
 from dataclasses import dataclass
 import time
 import queue
+import random
 import re
 
 from soco.core import DidlPlaylistContainer
@@ -25,6 +26,21 @@ class LineInFav:
     title: str
     device: str
     reference: object = None
+
+
+# a genre or artist tile on the favorites screen (favorites.genres / favorites.artists): queues a random sample
+# of its tracks from the music library, a fresh one on every tap. kind is 'genre' or 'artist'
+@dataclass
+class ShuffleFav:
+    title: str
+    kind: str
+    reference: object = None
+
+
+# only what the art cache needs from a favorite
+@dataclass
+class ShuffleArt:
+    album_art_uri: str
 
 
 @dataclass
@@ -96,6 +112,9 @@ class WPSoco:
         self.subscriptionCheckTime = config.getSubkey('connection', 'subscription_check_time', 60)
         self.lastSubscriptionCheck = 0
         self.cloudStartWait = config.getSubkey('connection', 'cloud_start_wait', 60)
+        self.maxTracks = {'genre': config.getSubkey('favorites', 'genre_max_tracks', 200),
+                          'artist': config.getSubkey('favorites', 'artist_max_tracks', 200)}
+        self.shuffleArtists = config.getSubkey('favorites', 'artists', [])
         if config.getSubkey('favorites', 'load_via', 'local') == 'cloud':
             cloud = WPSonosCloud(timeout=config.getSubkey('connection', 'cloud_timeout', 30))
             if cloud.ready():
@@ -308,10 +327,16 @@ class WPSoco:
             for title, fav in newFavs.items():
                 sid = favServiceId(fav)
                 self.status.logSilent(f"Favorite '{title}': service {sid} {self.status.serviceNames.get(sid, '')}")
+        # an album cover per shuffle artist, downloaded with the favorites' art (the cache keeps only what's passed)
+        artFavs = dict(newFavs)
+        if self.fakeFavCount is None and self.shuffleArtists:
+            self.status.artistArtUris = self.fetchArtistArtUris(self.mainCoordinator().music_library)
+            for name, uri in self.status.artistArtUris.items():
+                artFavs[f'artist art: {name}'] = ShuffleArt(uri)
         # titles show right away; art fills in once downloaded
         self.status.setFavs(newFavs)
         if self.fakeFavCount is None:
-            self.status.favArt.update(newFavs, self.mainCoordinator().music_library.build_album_art_full_uri)
+            self.status.favArt.update(artFavs, self.mainCoordinator().music_library.build_album_art_full_uri)
 
     # {service id: name} for every music service the speakers know, e.g. {204: 'Apple Music', 12: 'Spotify'}
     def fetchServiceNames(self):
@@ -627,6 +652,8 @@ class WPSoco:
                                 self.timedCall('switch_to_line_in', lambda: coordinator.switch_to_line_in(source=source))
                                 self.timedCall('play', coordinator.play)
                                 self.logTiming(f'play line-in {fav.device} total', started)
+                            elif isinstance(fav, ShuffleFav):
+                                self.playShuffle(fav)
                             elif self.cloud and getattr(fav, 'item_id', None):
                                 # one call; the speaker builds the queue itself, like the Sonos app
                                 started = time.monotonic()
@@ -667,6 +694,66 @@ class WPSoco:
                 fav = (kwargs.get('params') or {}).get('fav')
                 self.status.commandFailed(f"Couldn't play {fav.title if fav else 'favorite'}")
 
+
+    # a fresh random sample on every tap; the whole track list takes ~2ms a track to fetch (0.6s for 370)
+    def playShuffle(self, fav):
+        started = time.monotonic()
+        coordinator = self.timedCall('coordinator lookup', self.mainCoordinator)
+        tracks = self.timedCall(f'{fav.kind} tracks', lambda: self.shuffleTracks(coordinator.music_library, fav))
+        if not tracks:
+            raise Exception(f"no tracks for {fav.kind} '{fav.title}'")
+        sample = random.sample(tracks, min(self.maxTracks[fav.kind], len(tracks)))
+        self.status.log(f"{fav.kind.capitalize()} '{fav.title}': queueing {len(sample)} of {len(tracks)} tracks")
+        self.timedCall('clear_queue', coordinator.clear_queue)
+        self.timedCall('add_multiple_to_queue', lambda: self.waitCancellable('add_multiple_to_queue',
+            lambda: coordinator.add_multiple_to_queue(sample)))
+        self.timedCall('play_from_queue', lambda: coordinator.play_from_queue(0))
+        time.sleep(.5)
+        self.timedCall('fetchState', self.fetchState)
+        self.logTiming(f'play {fav.kind} {fav.title} total', started)
+
+    # a genre holds 'All' (its albums), whose first entry 'All' is every track; an artist's 'All' is the tracks
+    def shuffleTracks(self, library, fav):
+        if fav.kind == 'genre':
+            found = self.libraryEntry(library, 'genres', fav.title)
+            allTracks = library.browse(library.browse(found, max_items=1)[0], max_items=1)[0] if found else None
+        else:
+            found = self.libraryEntry(library, 'artists', fav.title)
+            allTracks = library.browse(found, max_items=1)[0] if found else None
+        if allTracks is None:
+            return []
+        tracks = []
+        while True:
+            page = library.browse(allTracks, start=len(tracks), max_items=500)
+            tracks += list(page)
+            if not len(page) or len(tracks) >= page.total_matches:
+                return tracks
+
+    # 'artists' is by track artist, so it includes their tracks on compilations; names match ignoring case
+    def libraryEntry(self, library, category, name):
+        if category == 'genres':
+            entries = library.get_genres(complete_result=True)
+        else:
+            entries = library.get_music_library_information(category, search_term=name, complete_result=True)
+        return next((e for e in entries if e.title.lower() == name.lower()), None)
+
+    # {artist: album_art_uri} from the first of each favorites.artists artist's albums with art, for tiles
+    # without images of their own
+    def fetchArtistArtUris(self, library):
+        uris = {}
+        for name in self.shuffleArtists:
+            try:
+                artist = self.libraryEntry(library, 'artists', name)
+                if artist is None:
+                    self.status.log(f"Artist '{name}' isn't in the music library", logging.WARNING)
+                    continue
+                albums = library.browse(artist, max_items=20)
+                uri = next((a.album_art_uri for a in albums if getattr(a, 'album_art_uri', None)), None)
+                if uri:
+                    uris[name] = uri
+            except Exception as e:
+                self.status.log(f"Error looking up art for artist '{name}': {e}", logging.WARNING)
+        return uris
 
     # play mode comes with the transport events (NORMAL, SHUFFLE, SHUFFLE_NOREPEAT, REPEAT_ALL...), so knowing
     # whether shuffle is on costs no extra speaker call

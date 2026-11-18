@@ -447,6 +447,7 @@ class WPDisplay:
     def openFavorites(self):
         self.displayState = WpDisplayState.FAVORITES
         self.favsSlideTarget = 1.0
+        self.favContentDisplay.pickShuffleArt()
 
     # the rooms screen slides up the same way, on the same slide
     def openRooms(self):

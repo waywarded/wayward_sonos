@@ -163,6 +163,23 @@ favorites:
   # whole playlist first, so long ones can take a while). cloud: one call to the Sonos cloud, like the Sonos app;
   # needs internet and a one-time `uv run sonos_auth.py`. Falls back to local if that sign-in is missing.
   load_via: cloud
+  # music library genres (as tagged in your files) that get a tile after the line-in one; each tap queues a fresh
+  # random pick of up to genre_max_tracks of the genre's tracks, so big genres don't build a huge queue
+  genres: ['Chill', 'Synthpop', 'Alternative', 'Punk', 'IDM', 'Techno & House', 'Ambient']
+  genre_max_tracks: 200
+  # tile art: a folder per genre in genre_image_dir holding PNGs or JPGs, one picked at random each time the
+  # favorites screen opens; initials if the folder is missing or empty. The folder is named after the genre,
+  # unless genre_folders maps it to another name (for genres with awkward characters)
+  genre_image_dir: 'assets/genres'
+  genre_folders:
+    'Techno & House': 'Techno'
+  # artists from the music library (by track artist, so their compilation tracks count too) that get a tile after
+  # the genres; same idea, with their own track limit. Art: a folder per artist like the genres, else one of
+  # the artist's album covers from the library
+  artists: ['New Order', 'Depeche Mode', 'Boards of Canada', 'Fugazi']
+  artist_max_tracks: 200
+  artist_image_dir: 'assets/artists'
+  artist_folders: {}
   # services whose favorites go at the end of the grid, after the library and saved Sonos playlists
   sort_last: [204]      # Apple Music: its playlists load slowly or fail
   # each favorite tile gets a badge for its music service, keyed by the service id in the favorite's link

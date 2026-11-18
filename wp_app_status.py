@@ -19,6 +19,7 @@ class WPAppStatus:
         self.favsFetching = False
         self.favArt = WPFavArtCache()
         self.serviceNames = {}          # {service id: name}, from the speakers; fetched once with the favorites
+        self.artistArtUris = {}         # {shuffle artist: album_art_uri} for favArt, from the Sonos thread; swapped whole
         self.shuffle = None             # main group's shuffle, from the speaker's events; None until one arrives
         self.rooms = []                 # [(name, in the main room's group)] by name, for the rooms screen; swapped whole
         self.mainRoom = None

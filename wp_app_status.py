@@ -41,9 +41,11 @@ class WPAppStatus:
         self.cancelRequested = threading.Event()    # set by the Cancel button; the running favorite stops waiting
         self._commandLock = threading.Lock()
 
-    def updateStatus(self, newStatus):
+    # also the step shown on the connecting screen
+    def updateStatus(self, newStatus, log=True):
         self.status = newStatus
-        logging.info(f'-------App status: {self.status}-------')
+        if log:
+            logging.info(f'-------App status: {self.status}-------')
 
     def updateAppState(self, newState: WpAppState):
         self.appState = newState

@@ -168,6 +168,7 @@ class WPDisplay:
         self.roomsDisplay = WpRoomsDisplay(config, appStatus, self)
         self.volumeDial = WpVolumeDial(config, appStatus, self)
         self.commandFeedback = WpCommandFeedback(config, appStatus, self)
+        self.configMainRoom = config.mainRoomName()     # named on the connecting screen until the speakers report it
 
         # favorites (or rooms) slides up over now playing: 0 = hidden, 1 = fully open
         self.favsSlide = 0.0
@@ -380,15 +381,13 @@ class WPDisplay:
             return
 
 
-    def renderNoConnectionInfo(self, statusString, deltaTime):
-        self.trackTextItem.setText("Not Connected")
-        self.trackTextItem.update(deltaTime)
-        self.trackTextItem.render(self.screen)        
-
-        self.speakerTextItem.setText(statusString)
-        self.speakerTextItem.setScrollMode('scrolling')
-        self.speakerTextItem.update(deltaTime)
-        self.speakerTextItem.render(self.screen)
+    # wpStatus.status is the step the Sonos thread is on, written to be read on the screen
+    def renderConnecting(self, deltaTime):
+        failed = self.wpStatus.appState == WpAppState.NO_CONNECTION
+        headline = "Not connected" if failed else "Connecting..."
+        room = self.wpStatus.mainRoom or self.configMainRoom
+        self.commandFeedback.update(deltaTime)
+        self.commandFeedback.renderConnecting(self.screen, room, headline, self.wpStatus.status, failed)
 
 
     def _draw_centered_text(self, text, color=(255,255,255), shadow=True, yPos = -999, font = None, surface = None):
@@ -424,11 +423,7 @@ class WPDisplay:
 
         # figure out if we are connected
         if (self.wpStatus.appState != WpAppState.CONNECTED):
-            # Not connected - display app status so we can get a sense of why.
-            statusText = self.statusFont.render(self.wpStatus.status + f"({str(self.wpStatus.appState)})", True, (255, 255, 255))
-            statusHeight = self.config.getSubkey('layout', 'status_font_size', 10)
-            self.screen.blit(statusText, (20, self.screenSize - statusHeight - 20))
-            self.renderNoConnectionInfo(self.wpStatus.status, deltaTime)
+            self.renderConnecting(deltaTime)
         else:
             self.renderTrackInfo(deltaTime)
             self.commandFeedback.update(deltaTime)

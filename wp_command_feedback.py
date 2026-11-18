@@ -26,6 +26,9 @@ class WpCommandFeedback:
         self.failColor = config.getSubkey('layout', 'command_feedback_fail_color', [230, 90, 70])
         self.failShowTime = config.getSubkey('layout', 'command_feedback_fail_time', 4.0)
         self.font = parent.uiHeaderFont
+        self.roomFont = parent.getFontForElement('connecting_room')
+        self.detailFont = parent.getFontForElement('connecting_detail')
+        self.detailColor = config.getSubkey('layout', 'connecting_detail_color', [190, 190, 190])
 
         self.cancelButton = WPDisplayButton(
             config.getSubkey('layout', 'command_feedback_cancel_pos', [280, 555]),
@@ -93,6 +96,18 @@ class WpCommandFeedback:
             if self.tile is not None:
                 self.renderTile(screen, self.tile)
             self.renderText(screen, "Couldn't play", self.failColor)
+
+    # while finding and attaching to the speakers: the room in the ring, what's happening under it, and the
+    # current step in smaller text. The spinner keeps going when it failed, since it retries by itself
+    def renderConnecting(self, screen, room, headline, detail, failed):
+        screen.blit(self.dimSurface, (0, 0))
+        if room:
+            self.parent._draw_centered_text(room, self.textColor, shadow=True, yPos=self.center[1], font=self.roomFont, surface=screen)
+        self.renderSpinner(screen)
+        self.renderText(screen, headline, self.failColor if failed else self.textColor)
+        if detail:
+            y = self.center[1] + self.spinnerRadius + 70
+            self.parent._draw_centered_text(detail, self.detailColor, shadow=True, yPos=y, font=self.detailFont, surface=screen)
 
     def renderTile(self, screen, tile):
         # art and name together, centred in the ring

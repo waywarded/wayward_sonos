@@ -62,6 +62,13 @@ layout:
   ui_header_font_size: 24
   ui_header_font_asset: 'assets/PublicSans-Bold.ttf'
 
+  # the connecting screen: the room in the spinner, the current step under "Connecting..."
+  connecting_room_font_size: 34
+  connecting_room_font_asset: 'assets/PublicSans-Bold.ttf'
+  connecting_detail_font_size: 20
+  connecting_detail_font_asset: 'assets/PublicSans-Medium.ttf'
+  connecting_detail_color: [190, 190, 190]
+
   play_state_y: 520
 
   # extra tap area around small buttons (art size unchanged)
@@ -176,7 +183,7 @@ favorites:
   # artists from the music library (by track artist, so their compilation tracks count too) that get a tile after
   # the genres; same idea, with their own track limit. Art: a folder per artist like the genres, else one of
   # the artist's album covers from the library
-  artists: ['New Order', 'Depeche Mode', 'Boards of Canada', 'Fugazi']
+  artists: ['New Order', 'Joy Division', 'Depeche Mode', 'Boards of Canada', 'Fugazi']
   artist_max_tracks: 200
   artist_image_dir: 'assets/artists'
   artist_folders: {}

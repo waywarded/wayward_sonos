@@ -59,7 +59,8 @@ def main():
     configPath = args.config
     displayConfigPath = args.display_config
     # Load config
-    wpStatus.updateStatus(f"Initializing from {configPath} and {displayConfigPath}")
+    wpStatus.log(f"Initializing from {configPath} and {displayConfigPath}")
+    wpStatus.updateStatus("Starting up")
     wpStatus.updateAppState(WpAppState.LOADING)
     wpConfig = WPConfig(configPath, displayConfigPath)
     wpStatus.log("Configuration loaded.", logging.INFO)

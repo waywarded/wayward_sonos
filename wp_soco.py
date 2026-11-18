@@ -130,7 +130,7 @@ class WPSoco:
         self.expectedRooms = {}         # {room: (in main group, until)} for our own recent changes
 
     def discoverDevices(self):
-        self.status.updateStatus("Sonos discovery...")
+        self.status.updateStatus("Looking for speakers")
         self.status.updateAppState(WpAppState.CONNECTING)
         self.status.log("Discovering Sonos devices on the network...", logging.INFO)
 
@@ -143,6 +143,7 @@ class WPSoco:
         self.status.log('done with discovery...')
         if not devices:
             self.status.log("No Sonos devices found.", logging.WARNING)
+            self.status.updateStatus("No speakers found")
             return
 
         self.status.logSilent(f"Devices: {[d.player_name for d in devices]}", logging.INFO)
@@ -152,7 +153,7 @@ class WPSoco:
             if device.player_name == mainDeviceName:
                 self.mainDevice = device
                 self.status.log(f"Found '{mainDeviceName}'", logging.INFO)
-                self.status.updateStatus(f"Found '{mainDeviceName}'")
+                self.status.updateStatus(f"Found {mainDeviceName}")
                 return
 
         self.status.log(f"Device '{mainDeviceName}' not found.", logging.WARNING)
@@ -163,7 +164,9 @@ class WPSoco:
                 if device.player_name == configMain:
                     self.mainDevice = device
                     self.status.log(f"Using the config's main room '{configMain}' instead", logging.INFO)
+                    self.status.updateStatus(f"Found {configMain}")
                     return
+        self.status.updateStatus(f"Can't find {mainDeviceName}")
 
     def listHouseholdDevices(self):
         self.status.logSilent("-----Devices on main household-----")
@@ -188,10 +191,7 @@ class WPSoco:
             self.status.log(
                 f"Main device '{mainDeviceName}' not found in any household. Please check your configuration.",
                 logging.ERROR)
-            self.status.updateStatus("Main device not found...")
             return
-
-        self.status.updateStatus(f"Configuring Groups ('{mainDeviceName}')...")
 
         return
         self.status.log(
@@ -368,12 +368,13 @@ class WPSoco:
             self.status.log(
                 "Cannot fetch initial state because main device is not set.",
                 logging.ERROR)
-            self.status.updateStatus("Main device not found...")
             self.status.updateAppState(WpAppState.NO_CONNECTION)
             return
 
+        self.status.updateStatus("Reading what's playing")
         self.fetchState()
         self.status.requestVolumeRead()
+        self.status.updateStatus("Loading favorites")
         try:
             self.fetchFavs()
         except Exception as e:
@@ -390,7 +391,6 @@ class WPSoco:
                     pass
             self.sub = None
 
-            self.status.updateStatus("Attempting Connection")
             self.status.updateAppState(WpAppState.CONNECTING)
             self.discoverDevices()
             self.configureGroups()
@@ -400,6 +400,7 @@ class WPSoco:
                 self.status.log(
                     f"Subscribing to Sonos events for main device '{self.mainDevice.player_name}'...",
                     logging.INFO)
+                self.status.updateStatus("Listening for changes")
                 self.subscribe()
                 self.status.updateAppState(WpAppState.CONNECTED)
             else:
@@ -407,6 +408,7 @@ class WPSoco:
                 self.status.updateAppState(WpAppState.NO_CONNECTION)
         except Exception as e:
             self.status.log(f'TRYCONNECT EXCEPTION: {e}')
+            self.status.updateStatus("Couldn't reach the speakers")
             self.sub = None
             self.status.updateAppState(WpAppState.NO_CONNECTION)
 
@@ -482,7 +484,11 @@ class WPSoco:
             doCheckConnection = False
 
             if self.sub is None:
-                time.sleep(reconnectTimeOut)
+                # keep why it failed on screen, with the countdown
+                reason = self.status.status.split(' · ')[0]
+                for left in range(reconnectTimeOut, 0, -1):
+                    self.status.updateStatus(f"{reason} · retrying in {left}s", log=False)
+                    time.sleep(1)
                 self.tryConnect()
                 continue
 
@@ -525,14 +531,14 @@ class WPSoco:
             if self.status.appState != WpAppState.CONNECTED:
                 reconnectTimer += 2
                 self.status.updateStatus(
-                    f"Retry in {str(reconnectTimeOut - reconnectTimer)}")
+                    f"Lost the speakers · retrying in {max(0, reconnectTimeOut - reconnectTimer)}s", log=False)
                 if reconnectTimer > reconnectTimeOut:
                     self.tryConnect()
                     reconnectTimer = 0
 
 
     def start(self):
-        self.status.updateStatus("Starting Sonos discovery thread...")
+        self.status.updateStatus("Starting up")
         t = threading.Thread(target=self.socoThread, daemon=True)
         t.start()
         v = threading.Thread(target=self.volumeThread, daemon=True)

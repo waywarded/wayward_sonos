@@ -628,6 +628,7 @@ class WPDisplay:
         self._draw_centered_text(self.roomsDisplay.title(), (255,255,255), shadow=True, yPos = 60, font=self.uiHeaderFont, surface=panel)
         self.roomsDisplay.render(panel)
         self.favsBackButton.render(panel)
+        self.roomsDisplay.renderVolume(panel)
 
     def renderSlidingPanel(self, deltaTime, drawPanel):
         self.favsSlide = moveToward(self.favsSlide, self.favsSlideTarget, deltaTime / self.favsSlideTime)
@@ -768,10 +769,14 @@ class WPDisplay:
         self.quitHoldElapsed = None
         if self.displayState == WpDisplayState.VOLUME:
             self.displayState = WpDisplayState.INFO
+        elif self.displayState == WpDisplayState.ROOMS:
+            self.roomsDisplay.release()
 
     def handleMotion(self, position):
         if self.displayState == WpDisplayState.VOLUME:
             self.volumeDial.motion(position)
+        elif self.displayState == WpDisplayState.ROOMS:
+            self.roomsDisplay.motion(position)
 
     def handleTapFavorites(self, position):
         # button rects are in panel coordinates, which only match the screen once fully open
@@ -790,11 +795,17 @@ class WPDisplay:
     def handleTapRooms(self, position):
         if self.favsSliding():
             return
+        if self.roomsDisplay.volumeOpen():
+            # the release went missing (e.g. dropped touch event); a new touch closes the bar
+            self.roomsDisplay.closeVolume()
+            return
         if self.favsBackButton.check_tap(position):
             self.closeFavorites()
         elif self.roomsDisplay.checkPageTap(position):
             pass
         elif self.roomsDisplay.checkSetMainTap(position):
+            pass
+        elif self.roomsDisplay.checkVolumePress(position):
             pass
         else:
             self.roomsDisplay.checkRowTap(position)

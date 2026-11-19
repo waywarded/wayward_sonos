@@ -618,7 +618,9 @@ class WPSoco:
     def checkVolume(self):
         if self.status.appState != WpAppState.CONNECTED or self.mainDevice is None:
             self.status.takeVolumeTarget()  # drop it: don't apply a stale level after reconnecting
+            self.status.takeRoomVolumeWork()
             return
+        self.checkRoomVolumes()
         try:
             target = self.status.takeVolumeTarget()
             if target is not None:
@@ -633,6 +635,22 @@ class WPSoco:
                 self.status.groupVolume = self.mainDevice.group.volume   # also snapshots the group volume
         except Exception as e:
             self.status.log(f"Volume exception: {e}", logging.ERROR)
+
+    # a single speaker's volume, from the rooms screen. The group dial reads the group volume again when it
+    # opens, which re-snapshots the speakers' levels, so it keeps the balance set here
+    def checkRoomVolumes(self):
+        targets, reads = self.status.takeRoomVolumeWork()
+        for room in set(targets) | reads:
+            try:
+                device = self.roomDevice(room)
+                if room in targets:
+                    device.volume = max(0, min(int(targets[room]), 100))
+                    level = targets[room]
+                else:
+                    level = device.volume
+                self.status.roomVolumes = {**self.status.roomVolumes, room: level}
+            except Exception as e:
+                self.status.log(f"Volume exception for {room}: {e}", logging.ERROR)
 
     # taps arrive on the display (or Stream Deck) thread: queue the command and return straight away,
     # so a slow speaker never freezes the screen. commandThread runs them one at a time, in tap order.

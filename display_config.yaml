@@ -178,6 +178,14 @@ layout:
   rooms_set_main_font_asset: 'assets/PublicSans-Medium.ttf'
   rooms_failure_y: 606          # "Couldn't add ..." message, between the list and the down button
   rooms_pending_alpha: 110     # a room being added or removed is dimmed until the speakers report it
+  # speaker button beside each room in the group: hold it and slide left/right for that speaker's volume alone;
+  # sliding rooms_volume_pixels covers 0 to 100
+  rooms_volume_button_size: [30, 30]
+  rooms_volume_button_gap: 14
+  rooms_volume_button_hit_padding: 12
+  rooms_volume_pixels: 500
+  rooms_volume_bar_size: [520, 28]
+  rooms_volume_bar_y: 400
   # music service badge in the corner of each favorite's art (icons and short names under favorites.services)
   favs_service_badge_size: 30
   favs_service_badge_color: [20, 20, 20]

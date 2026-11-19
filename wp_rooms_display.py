@@ -6,7 +6,8 @@ from wp_display_button import WPDisplayButton
 
 # the rooms screen: one row per speaker, the main room marked, the rooms grouped with it filled in.
 # tapping a room adds it to the main room's group or takes it out; the main room itself can't be tapped.
-# Set main switches to picking a new main room: the next room tapped becomes it (Cancel to back out)
+# Set main switches to picking a new main room: the next room tapped becomes it (Cancel to back out).
+# Rooms in the group have a speaker button beside them: hold it and slide left or right for that speaker alone
 class WpRoomsDisplay:
     def __init__(self, config, wpStatus, parent):
         self.config = config
@@ -49,6 +50,29 @@ class WpRoomsDisplay:
         self.setMainButton.moveCenter(setMainCenter)
         self.cancelButton.moveCenter(setMainCenter)
 
+        volumeSize = config.getSubkey('layout', 'rooms_volume_button_size', [30, 30])
+        self.volumeGap = config.getSubkey('layout', 'rooms_volume_button_gap', 14)
+        self.volumeImage = pygame.transform.smoothscale(
+            pygame.image.load(config.getSubkey('layout', 'volume_button_asset', 'assets/VolBtn.png')).convert_alpha(), volumeSize)
+        self.volumeHitPadding = config.getSubkey('layout', 'rooms_volume_button_hit_padding', 12)
+        self.volumeButtons = []     # [(button, name)] for the rooms in the group on this page
+        # the volume bar shown while a room's speaker button is held
+        self.volumeRoom = None
+        self.volume = None          # float while the bar is up; None until the speaker has told us the level
+        self.moved = False
+        self.lastX = 0
+        self.lastRequested = None
+        self.pixelsForFullRange = config.getSubkey('layout', 'rooms_volume_pixels', 500)
+        self.barSize = config.getSubkey('layout', 'rooms_volume_bar_size', [520, 28])
+        self.barY = config.getSubkey('layout', 'rooms_volume_bar_y', 400)
+        self.trackColor = config.getSubkey('layout', 'volume_dial_track_color', [70, 70, 70])
+        self.levelColor = config.getSubkey('layout', 'volume_dial_level_color', [255, 255, 255])
+        self.numberFont = parent.getFontForElement('volume_dial')
+        self.labelFont = parent.getFontForElement('volume_dial_label')
+        size = parent.screenSize
+        self.dimSurface = pygame.Surface((size, size), pygame.SRCALPHA)
+        self.dimSurface.fill((0, 0, 0, config.getSubkey('layout', 'volume_dial_dim_alpha', 190)))
+
         self.choosingMain = False
         self.builtChoosing = False  # choosingMain the rows were built with
         self.page = 0
@@ -72,6 +96,7 @@ class WpRoomsDisplay:
 
     def setupDisplay(self):
         self.rows = []
+        self.volumeButtons = []
         width, height = self.rowSize
         first = self.page * self.rowsPerPage
         pageRooms = self.rooms[first:first + self.rowsPerPage]
@@ -85,6 +110,10 @@ class WpRoomsDisplay:
             button.setEnabled(name != self.pending and name != self.wpStatus.mainRoom)
             button.disabled_surface.set_alpha(255 if name == self.wpStatus.mainRoom else self.pendingAlpha)
             self.rows.append((button, name, inGroup))
+            if inGroup:
+                volume = WPDisplayButton([0, 0], self.volumeImage.get_size(), self.volumeImage, hitPadding=self.volumeHitPadding)
+                volume.moveCenter((button.rect.right + self.volumeGap + volume.rect.width // 2, button.rect.centery))
+                self.volumeButtons.append((volume, name))
 
         self.prevPageButton.setVisible(self.page > 0)
         self.nextPageButton.setVisible(self.page < self.pageCount() - 1)
@@ -129,6 +158,8 @@ class WpRoomsDisplay:
     # opening the screen always starts in the normal mode
     def reset(self):
         self.choosingMain = False
+        self.closeVolume()
+
 
     def drawTick(self, surf, center, ticked):
         size = 13
@@ -153,6 +184,9 @@ class WpRoomsDisplay:
             return
         for button, name, inGroup in self.rows:
             button.render(screen)
+        for button, name in self.volumeButtons:
+            button.setVisible(not self.choosingMain)
+            button.render(screen)
         self.prevPageButton.render(screen)
         self.nextPageButton.render(screen)
         # no switching while a room is being changed (or a main room switch is under way)
@@ -164,6 +198,69 @@ class WpRoomsDisplay:
         failure = self.wpStatus.roomFailure
         if failure is not None and time.monotonic() - failure[1] <= self.failShowTime:
             self.parent._draw_centered_text(failure[0], self.failColor, shadow=True, yPos=self.failureY, font=self.font, surface=screen)
+
+    # while a room's speaker button is held: the screen dims and a bar shows that speaker's volume.
+    # Relative, like the main dial: sliding right raises it, left lowers it, so pressing never jumps the level
+    def renderVolume(self, screen):
+        if self.volumeRoom is None:
+            return
+        if not self.moved and self.wpStatus.roomVolumes.get(self.volumeRoom) is not None:
+            self.volume = float(self.wpStatus.roomVolumes[self.volumeRoom])
+        screen.blit(self.dimSurface, (0, 0))
+        center = screen.get_width() // 2
+        width, height = self.barSize
+        bar = pygame.Rect(0, 0, width, height)
+        bar.center = (center, self.barY)
+        radius = height // 2
+        pygame.draw.rect(screen, self.trackColor, bar, border_radius=radius)
+        if self.volume is not None:
+            fill = bar.copy()
+            fill.width = 2 * radius + round((width - 2 * radius) * self.volume / 100)
+            pygame.draw.rect(screen, self.levelColor, fill, border_radius=radius)
+        number = self.numberFont.render('--' if self.volume is None else str(round(self.volume)), True, self.textColor)
+        screen.blit(number, number.get_rect(midbottom=(center, bar.top - 20)))
+        label = self.labelFont.render(self.volumeRoom, True, self.textColor)
+        screen.blit(label, label.get_rect(midtop=(center, bar.bottom + 20)))
+
+    # pressing a room's speaker button opens its volume bar; it closes on release
+    def checkVolumePress(self, position) -> bool:
+        for button, name in self.volumeButtons:
+            if button.check_tap(position):
+                self.wpStatus.requestRoomVolumeRead(name)     # fresh, in case it was changed from the phone
+                level = self.wpStatus.roomVolumes.get(name)
+                self.volumeRoom = name
+                self.volume = None if level is None else float(level)
+                self.moved = False
+                self.lastX = position[0]
+                self.lastRequested = None
+                return True
+        return False
+
+    def motion(self, position):
+        if self.volumeRoom is None:
+            return
+        delta = position[0] - self.lastX
+        self.lastX = position[0]
+        if self.volume is None:
+            return
+        self.volume = max(0.0, min(100.0, self.volume + delta * 100.0 / self.pixelsForFullRange))
+        self.moved = True
+        level = round(self.volume)
+        if level != self.lastRequested:
+            self.lastRequested = level
+            self.wpStatus.requestRoomVolume(self.volumeRoom, level)
+
+    def release(self):
+        if self.volumeRoom is not None and self.lastRequested is not None:
+            # show what was asked for until the speaker's own reading replaces it
+            self.wpStatus.roomVolumes = {**self.wpStatus.roomVolumes, self.volumeRoom: self.lastRequested}
+        self.closeVolume()
+
+    def volumeOpen(self):
+        return self.volumeRoom is not None
+
+    def closeVolume(self):
+        self.volumeRoom = None
 
     def checkPageTap(self, position) -> bool:
         if self.prevPageButton.check_tap(position):

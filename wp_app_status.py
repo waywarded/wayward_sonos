@@ -33,6 +33,10 @@ class WPAppStatus:
         self.volumeReadRequested = False
         self._volumeTarget = None
         self._volumeLock = threading.Lock()
+        # each room's own volume, for the rooms screen's sliders; same worker, latest request per room wins
+        self.roomVolumes = {}           # {room: volume}; swapped whole
+        self._roomVolumeTargets = {}
+        self._roomVolumeReads = set()
 
         # Sonos commands run on their own thread; the display reads these to show the tap was seen
         self.commandsPending = 0      # queued or running
@@ -114,6 +118,21 @@ class WPAppStatus:
 
     def requestVolumeRead(self):
         self.volumeReadRequested = True
+
+    def requestRoomVolume(self, room, volume):
+        with self._volumeLock:
+            self._roomVolumeTargets[room] = volume
+
+    def requestRoomVolumeRead(self, room):
+        with self._volumeLock:
+            self._roomVolumeReads.add(room)
+
+    # ({room: volume} to set, {rooms} to read), each handed to the worker once
+    def takeRoomVolumeWork(self):
+        with self._volumeLock:
+            targets, reads = self._roomVolumeTargets, self._roomVolumeReads
+            self._roomVolumeTargets, self._roomVolumeReads = {}, set()
+            return targets, reads
 
     def favsRefreshPending(self):
         return self.favsRefreshRequested or self.favsFetching

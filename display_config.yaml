@@ -8,6 +8,7 @@ display:
   text_shadow_offset: [2, 2]
   line_in_track_image: "assets/lineIn02.png"
   line_in_track_name: "Record Player"
+  resync_script: "resync_display.sh"     # "Fix screen" on the quit confirm: makes the panel re-sync (Pi only)
 
 
 layout:
@@ -102,6 +103,7 @@ layout:
   # press and hold here (above the song title, around the room name) to get the quit confirm: [x, y, w, h]
   quit_hold_area: [200, 10, 320, 85]
   quit_hold_time: 1.5
+  quit_resync_top: 590     # the quit confirm's "Fix screen" strip, from here to the bottom
 
   # volume dial (while the volume button is held): turning volume_dial_degrees covers 0 to 100
   volume_dial_degrees: 270

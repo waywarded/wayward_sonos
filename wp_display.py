@@ -2,6 +2,8 @@ import pygame
 import sys
 import logging
 import requests
+import os
+import subprocess
 from io import BytesIO
 from play_state_display import PlayStateDisplay, moveToward
 from wp_marquee_text import WPMarqueeText
@@ -224,6 +226,9 @@ class WPDisplay:
         self.quitHoldRect = pygame.Rect(holdArea[0], holdArea[1], holdArea[2], holdArea[3])
         self.quitHoldTime = config.getSubkey('layout', 'quit_hold_time', 1.5)
         self.quitHoldElapsed = None     # None when not holding
+        # a strip at the bottom of the quit confirm that re-syncs a glitching panel instead of quitting
+        self.resyncTop = config.getSubkey('layout', 'quit_resync_top', 590)
+        self.resyncScript = config.getSubkey('display', 'resync_script', 'resync_display.sh')
 
     def getFontForElement(self, itemName):
         fontName = self.config.getSubkey('layout', f'{itemName}_font_asset', 'assets/PublicSans-Medium.ttf')
@@ -592,7 +597,9 @@ class WPDisplay:
 
         self._draw_centered_text("Really Quit?", (200,0,0), shadow=True, yPos = 45, font=self.uiHeaderFont)
         self._draw_centered_text("Yes", (255,255,255), shadow=True, yPos = 200, font=self.uiHeaderFont)
-        self._draw_centered_text("No", (255,255,255), shadow=True, yPos = 500, font=self.uiHeaderFont)
+        self._draw_centered_text("No", (255,255,255), shadow=True, yPos = 470, font=self.uiHeaderFont)
+        pygame.draw.rect(self.screen, (25, 55, 85), pygame.Rect(0, self.resyncTop, self.screenSize, self.screenSize - self.resyncTop))
+        self._draw_centered_text("Fix screen", (255,255,255), shadow=True, yPos = self.resyncTop + 50, font=self.uiHeaderFont)
 
     def openFavorites(self):
         self.displayState = WpDisplayState.FAVORITES
@@ -762,7 +769,8 @@ class WPDisplay:
         if self.textBandTapped(position):
             self.textHidden = not self.textHidden
             return
-        if self.quitHoldRect.collidepoint(position):
+        # while connecting there's nothing else to tap and no hint where the hold area is, so hold anywhere
+        if self.quitHoldRect.collidepoint(position) or self.wpStatus.appState != WpAppState.CONNECTED:
             self.quitHoldElapsed = 0.0
 
     def handleRelease(self, position):
@@ -811,10 +819,24 @@ class WPDisplay:
             self.roomsDisplay.checkRowTap(position)
 
     def handleTapConfirm(self, position):
-        if position[1] > self.screenSize//2:
+        if position[1] >= self.resyncTop:
+            self.displayState = WpDisplayState.INFO
+            self.resyncDisplay()
+        elif position[1] > self.screenSize//2:
             self.displayState = WpDisplayState.INFO
         else:
             self.displayState = WpDisplayState.QUITTING
+
+    # runs in the background: the mode switch blanks the panel for a moment, and the app keeps drawing meanwhile
+    def resyncDisplay(self):
+        if not sys.platform.startswith('linux'):
+            self.wpStatus.log("Fix screen: only on the Pi", logging.INFO)
+            return
+        try:
+            subprocess.Popen(['sh', os.path.abspath(self.resyncScript)], stdin=subprocess.DEVNULL)
+            self.wpStatus.log(f"Fix screen: ran {self.resyncScript}", logging.INFO)
+        except Exception as e:
+            self.wpStatus.log(f"Fix screen failed: {e}", logging.ERROR)
 
     def run(self):
         self.wpStatus.updateStatus("Starting display loop...")

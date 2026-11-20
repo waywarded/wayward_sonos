@@ -166,6 +166,8 @@ layout:
   rooms_row_size: [340, 54]
   rooms_row_gap: 10
   rooms_rows: 7
+  rooms_refresh_button_gap: 22     # from the "Rooms" title to its refresh button (favorites' art and size)
+  rooms_refresh_button_hit_padding: 10
   rooms_list_center_y: 365
   rooms_member_color: [40, 90, 140]
   rooms_other_color: [30, 30, 30]

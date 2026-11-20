@@ -579,6 +579,12 @@ class WPSoco:
                 self.checkSubscription()
             self.checkFavsRefresh(favsRefreshTime)
             if self.status.roomsRefreshRequested and self.status.appState == WpAppState.CONNECTED:
+                # opening the rooms screen or its refresh: ask the speaker again rather than soco's cached copy,
+                # so a room that just dropped out or came back shows
+                try:
+                    self.mainDevice.zone_group_state.clear_cache()
+                except Exception:
+                    pass
                 self.fetchRooms()
             if self.status.mainRoomRequested and self.status.appState == WpAppState.CONNECTED:
                 self.switchMainRoom(self.status.mainRoomRequested)

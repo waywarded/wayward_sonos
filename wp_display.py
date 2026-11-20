@@ -208,6 +208,15 @@ class WPDisplay:
             hitPadding=hitPadding
         )
 
+        # same art and size as favorites' refresh; placed just right of the "Rooms" title each frame
+        self.roomsRefreshButton = WPDisplayButton(
+            [0, 0],
+            config.getSubkey('layout', 'favs_refresh_button_size', [30, 30]),
+            config.getSubkey('layout', 'favs_refresh_button_asset', 'assets/RefreshBtn.png'),
+            hitPadding=config.getSubkey('layout', 'rooms_refresh_button_hit_padding', 10)
+        )
+        self.roomsRefreshGap = config.getSubkey('layout', 'rooms_refresh_button_gap', 22)
+
         self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)
         self.roomsDisplay = WpRoomsDisplay(config, appStatus, self)
         self.volumeDial = WpVolumeDial(config, appStatus, self)
@@ -632,7 +641,15 @@ class WPDisplay:
             self.favsRefreshButton.render(panel)
 
     def drawRoomsPanel(self, panel):
-        self._draw_centered_text(self.roomsDisplay.title(), (255,255,255), shadow=True, yPos = 60, font=self.uiHeaderFont, surface=panel)
+        title = self.roomsDisplay.title()
+        self._draw_centered_text(title, (255,255,255), shadow=True, yPos = 60, font=self.uiHeaderFont, surface=panel)
+        # not while picking the main room: that title is too wide to fit it beside
+        self.roomsRefreshButton.setVisible(not self.roomsDisplay.choosingMain)
+        if self.roomsRefreshButton.visible:
+            titleRight = self.screenSize // 2 + self.uiHeaderFont.size(title)[0] // 2
+            self.roomsRefreshButton.moveCenter((titleRight + self.roomsRefreshGap + self.roomsRefreshButton.rect.width // 2, 60))
+            self.roomsRefreshButton.setEnabled(not self.wpStatus.roomsRefreshRequested)
+            self.roomsRefreshButton.render(panel)
         self.roomsDisplay.render(panel)
         self.favsBackButton.render(panel)
         self.roomsDisplay.renderVolume(panel)
@@ -813,6 +830,9 @@ class WPDisplay:
             pass
         elif self.roomsDisplay.checkSetMainTap(position):
             pass
+        # after Set main, which wins the corner where their tap areas meet
+        elif self.roomsRefreshButton.check_tap(position):
+            self.wpStatus.requestRoomsRefresh()
         elif self.roomsDisplay.checkVolumePress(position):
             pass
         else:

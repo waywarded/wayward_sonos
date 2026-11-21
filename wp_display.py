@@ -406,7 +406,8 @@ class WPDisplay:
     # one or two lines of title sit on track_text_bottom, so the artist and album under it never move
     def placeTitle(self):
         item = self.trackTextItem
-        height = item.blockHeight()
+        # at least one line's worth, so the band keeps its shape with no title
+        height = max(item.blockHeight(), item.fontHeight)
         lift = 0 if item.requiresSplit else self.textBandSingleLinePadding
         if self.trackTextBottom is not None:
             item.posCenter = (item.posCenter[0], self.trackTextBottom - lift - height // 2)
@@ -438,8 +439,8 @@ class WPDisplay:
 
         self.renderTrackArt()
 
-        self.trackTextItem.setText(trackInfo.title)
-        self.artistTextItem.setText(trackInfo.artist)
+        self.trackTextItem.setText(self.streamTitle(trackInfo))
+        self.artistTextItem.setText(self.streamStatus(trackInfo) or trackInfo.artist)
         self.albumTextItem.setText(trackInfo.album)
         self.albumTextItem.setScrollMode('scrolling')
         self.placeTitle()
@@ -454,6 +455,23 @@ class WPDisplay:
 
         self.renderTextBand(deltaTime, (self.trackTextItem, self.artistOrAlbum(trackInfo, deltaTime)))
         self.speakerTextItem.render(self.screen)
+
+    # a stopped stream has no title, and a starting one says ZPSTR_BUFFERING or ZPSTR_CONNECTING:
+    # show the station's favorite name instead
+    def streamTitle(self, trackInfo):
+        title = trackInfo.title or ''
+        if title.startswith('ZPSTR_'):
+            title = ''
+        if not title and trackInfo.radio:
+            title = trackInfo.favorite
+        return title
+
+    # Sonos's ZPSTR_BUFFERING, ZPSTR_CONNECTING... as words, shown under the station name while it tunes in
+    def streamStatus(self, trackInfo):
+        title = trackInfo.title or ''
+        if not title.startswith('ZPSTR_'):
+            return ''
+        return title[len('ZPSTR_'):].replace('_', ' ').capitalize() + '...'
 
     def buttonsVisible(self):
         return self.wpStatus.appState == WpAppState.CONNECTED and self.wpStatus.latestTrackInfo is not None

@@ -55,6 +55,8 @@ class WpAutoSplitText:
         self.pickFont()
         self.checkWrap()
 
+        # cleared first, so an empty title doesn't leave the last one on screen
+        self.line1TextSurf = self.line1ShadowSurf = self.line2TextSurf = self.line2ShadowSurf = None
         if self.line1Text:
             self.line1TextSurf = self.pyFont.render(self.line1Text, True, self.textColor, None)
             self.line1ShadowSurf = self.pyFont.render(self.line1Text, True, self.textShadowColor, None) if self.doShadow else None

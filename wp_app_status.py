@@ -24,6 +24,7 @@ class WPAppStatus:
         self.rooms = []                 # [(name, in the main room's group)] by name, for the rooms screen; swapped whole
         self.mainRoom = None
         self.roomsRefreshRequested = False
+        self.resyncRequested = False
         self.roomPending = None         # the room being added or removed, while the command is queued or running
         self.roomFailure = None         # (message, time.monotonic()) of the last failed add or remove
         self.mainRoomRequested = None   # a room picked as the new main room, for the Sonos thread
@@ -96,6 +97,11 @@ class WPAppStatus:
 
     # the rooms screen asks when it opens, since grouping done in the Sonos app doesn't reach us as an event
     def requestRoomsRefresh(self):
+        self.roomsRefreshRequested = True
+
+    # the rooms screen's refresh: a fresh event subscription and state as well as the room list
+    def requestResync(self):
+        self.resyncRequested = True
         self.roomsRefreshRequested = True
 
     def requestMainRoom(self, room):

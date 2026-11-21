@@ -11,6 +11,8 @@ import random
 import re
 
 from soco.core import DidlPlaylistContainer, MUSIC_SRC_RADIO
+from soco.events import event_listener
+from soco.events_base import get_listen_ip
 
 # dev aid: stands in for a Sonos favorite (--fake_favs); no reference, so playing it does nothing
 @dataclass
@@ -476,9 +478,24 @@ class WPSoco:
 
     def subscribe(self):
         self.coordinator = self.mainDevice.group.coordinator
+        if self.listenerMoved(self.coordinator):
+            # soco's stop() pokes the old address to wake its server, which can hang now that it's gone;
+            # marking it stopped is enough for subscribe to start a listener on the new address
+            # (the old server thread is a daemon, left waiting on its dead address)
+            event_listener.is_running = False
         self.sub = self.coordinator.avTransport.subscribe(requested_timeout=self.subscriptionTimeout)
         self.lastSubscriptionCheck = time.monotonic()
-        self.status.log(f"Subscribed to events from '{self.coordinator.player_name}' for {self.sub.timeout}s", logging.INFO)
+        self.status.log(f"Subscribed to events from '{self.coordinator.player_name}' for {self.sub.timeout}s; "
+                        f"they come to {self.listenAddress()}", logging.INFO)
+
+    # speakers send events back to the address this machine had when the listener started, and renewals keep
+    # working after it changes (they go the other way), so nothing else notices events have stopped arriving.
+    # (old, new) when the address the speaker is reached from isn't the listener's any more
+    def listenerMoved(self, speaker):
+        if not event_listener.is_running:
+            return None
+        listenIp, currentIp = event_listener.address[0], get_listen_ip(speaker.ip_address)
+        return (listenIp, currentIp) if currentIp and currentIp != listenIp else None
 
     # events stop without any error when the speaker forgets the subscription (it restarted, e.g. an overnight
     # update) or the group gets a new coordinator, so: renew well before it runs out, and subscribe again when a
@@ -489,12 +506,15 @@ class WPSoco:
         self.lastSubscriptionCheck = time.monotonic()
         try:
             coordinator = self.mainDevice.group.coordinator
-            if coordinator != self.coordinator:
+            moved = self.listenerMoved(coordinator)
+            if moved:
+                reason = f"this machine's address changed from {moved[0]} to {moved[1]}"
+            elif coordinator != self.coordinator:
                 reason = f"coordinator is now '{coordinator.player_name}'"
             elif self.sub.time_left < self.subscriptionTimeout / 3:
                 try:
                     self.sub.renew(requested_timeout=self.subscriptionTimeout)
-                    self.status.logSilent(f"Renewed event subscription ({self.sub.time_left:.0f}s)")
+                    self.status.logSilent(f"Renewed event subscription ({self.sub.time_left:.0f}s); events to {self.listenAddress()}")
                     return
                 except Exception as e:
                     reason = f"renewal failed: {e}"
@@ -503,7 +523,19 @@ class WPSoco:
         except Exception as e:
             reason = f"check failed: {e}"
 
+        self.resubscribe(reason)
+
+    # a fresh subscription (and listener, when this machine's address changed), then a catch-up read.
+    # also what the rooms screen's refresh does, as a way to get a display back in sync by hand
+    def resubscribe(self, reason):
         self.status.log(f"Subscribing again to Sonos events: {reason}", logging.WARNING)
+        try:
+            if self.listenerMoved(self.mainDevice.group.coordinator):
+                # before unsubscribing: dropping the last subscription stops the listener, and soco's stop()
+                # pokes the old address to wake its server, which can hang now that the address is gone
+                event_listener.is_running = False
+        except Exception:
+            pass
         try:
             self.sub.unsubscribe()
         except Exception:
@@ -511,10 +543,14 @@ class WPSoco:
         try:
             self.subscribe()
             self.fetchState()       # catch up on what was missed
+            self.status.requestVolumeRead()
         except Exception as e:
             self.status.log(f"Couldn't subscribe again ({e}); reconnecting", logging.WARNING)
             self.sub = None
             self.status.updateAppState(WpAppState.NO_CONNECTION)
+
+    def listenAddress(self):
+        return f"{event_listener.address[0]}:{event_listener.address[1]}" if event_listener.is_running else "nowhere"
 
     def checkConnection(self):
         # self.status.logSilent(f"Checking connection...")
@@ -578,6 +614,9 @@ class WPSoco:
             if self.sub is not None and self.status.appState == WpAppState.CONNECTED:
                 self.checkSubscription()
             self.checkFavsRefresh(favsRefreshTime)
+            if self.status.resyncRequested and self.status.appState == WpAppState.CONNECTED:
+                self.status.resyncRequested = False
+                self.resubscribe("refresh tapped on the rooms screen")
             if self.status.roomsRefreshRequested and self.status.appState == WpAppState.CONNECTED:
                 # opening the rooms screen or its refresh: ask the speaker again rather than soco's cached copy,
                 # so a room that just dropped out or came back shows

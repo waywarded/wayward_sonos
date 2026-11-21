@@ -850,7 +850,7 @@ class WPDisplay:
             pass
         # after Set main, which wins the corner where their tap areas meet
         elif self.roomsRefreshButton.check_tap(position):
-            self.wpStatus.requestRoomsRefresh()
+            self.wpStatus.requestResync()
         elif self.roomsDisplay.checkVolumePress(position):
             pass
         else:

@@ -103,7 +103,15 @@ layout:
   # press and hold here (above the song title, around the room name) to get the quit confirm: [x, y, w, h]
   quit_hold_area: [200, 10, 320, 85]
   quit_hold_time: 1.5
-  quit_resync_top: 590     # the quit confirm's "Fix screen" strip, from here to the bottom
+  quit_resync_top: 620     # the quit confirm's "Fix screen" strip, from here to the bottom
+  quit_log_top: 520        # and its "Log" strip, from here down to quit_resync_top
+
+  # the log screen: warnings, errors, and the connection/network lines (display: log_view_patterns overrides
+  # which info lines show), newest at the bottom; the side arrows page back and forward
+  log_font_size: 17
+  log_font_asset: 'assets/PublicSans-Medium.ttf'
+  log_top: 105
+  log_bottom: 600
 
   # volume dial (while the volume button is held): turning volume_dial_degrees covers 0 to 100
   volume_dial_degrees: 270

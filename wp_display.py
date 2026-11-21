@@ -14,6 +14,7 @@ from wp_fav_content_display import WpFavContentDisplay
 from wp_rooms_display import WpRoomsDisplay
 from wp_volume_dial import WpVolumeDial
 from wp_command_feedback import WpCommandFeedback
+from wp_log_view import WpLogView
 from wp_soco import NowPlayingInfo
 
 from enum import Enum
@@ -24,6 +25,7 @@ class WpDisplayState(Enum):
     ROOMS="Rooms"
     VOLUME="Volume"
     QUIT_CONFIRM="QuitConfirm"
+    LOG="Log"
     QUITTING="Quitting"
 
 class WPDisplay:
@@ -217,6 +219,7 @@ class WPDisplay:
         )
         self.roomsRefreshGap = config.getSubkey('layout', 'rooms_refresh_button_gap', 22)
 
+        self.logView = WpLogView(config, self)
         self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)
         self.roomsDisplay = WpRoomsDisplay(config, appStatus, self)
         self.volumeDial = WpVolumeDial(config, appStatus, self)
@@ -236,7 +239,9 @@ class WPDisplay:
         self.quitHoldTime = config.getSubkey('layout', 'quit_hold_time', 1.5)
         self.quitHoldElapsed = None     # None when not holding
         # a strip at the bottom of the quit confirm that re-syncs a glitching panel instead of quitting
-        self.resyncTop = config.getSubkey('layout', 'quit_resync_top', 590)
+        self.resyncTop = config.getSubkey('layout', 'quit_resync_top', 620)
+        # and above it, one that opens the log
+        self.logTop = config.getSubkey('layout', 'quit_log_top', 520)
         self.resyncScript = config.getSubkey('display', 'resync_script', 'resync_display.sh')
 
     def getFontForElement(self, itemName):
@@ -624,9 +629,11 @@ class WPDisplay:
 
         self._draw_centered_text("Really Quit?", (200,0,0), shadow=True, yPos = 45, font=self.uiHeaderFont)
         self._draw_centered_text("Yes", (255,255,255), shadow=True, yPos = 200, font=self.uiHeaderFont)
-        self._draw_centered_text("No", (255,255,255), shadow=True, yPos = 470, font=self.uiHeaderFont)
+        self._draw_centered_text("No", (255,255,255), shadow=True, yPos = (self.screenSize // 2 + self.logTop) // 2, font=self.uiHeaderFont)
+        pygame.draw.rect(self.screen, (60, 60, 60), pygame.Rect(0, self.logTop, self.screenSize, self.resyncTop - self.logTop))
+        self._draw_centered_text("Log", (255,255,255), shadow=True, yPos = (self.logTop + self.resyncTop) // 2, font=self.uiHeaderFont)
         pygame.draw.rect(self.screen, (25, 55, 85), pygame.Rect(0, self.resyncTop, self.screenSize, self.screenSize - self.resyncTop))
-        self._draw_centered_text("Fix screen", (255,255,255), shadow=True, yPos = self.resyncTop + 50, font=self.uiHeaderFont)
+        self._draw_centered_text("Fix screen", (255,255,255), shadow=True, yPos = self.resyncTop + 45, font=self.uiHeaderFont)
 
     def openFavorites(self):
         self.displayState = WpDisplayState.FAVORITES
@@ -714,6 +721,9 @@ class WPDisplay:
             self.volumeDial.render(self.screen)
         elif self.displayState == WpDisplayState.QUIT_CONFIRM:
             self.renderQuitConfirm(deltaTime)
+        elif self.displayState == WpDisplayState.LOG:
+            self.logView.render(self.screen)
+            self.favsBackButton.render(self.screen)
 
         if self.roundMask:
             self.renderRoundMask()
@@ -784,6 +794,10 @@ class WPDisplay:
 
         if self.displayState == WpDisplayState.QUIT_CONFIRM:
             self.handleTapConfirm(position)
+        elif self.displayState == WpDisplayState.LOG:
+            # the down arrow, or anywhere but the page arrows, goes back
+            if not self.logView.checkPageTap(position):
+                self.displayState = WpDisplayState.INFO
         elif self.displayState == WpDisplayState.INFO:
             self.handleTapInfo(position)
         elif self.displayState == WpDisplayState.FAVORITES:
@@ -860,6 +874,9 @@ class WPDisplay:
         if position[1] >= self.resyncTop:
             self.displayState = WpDisplayState.INFO
             self.resyncDisplay()
+        elif position[1] >= self.logTop:
+            self.logView.reset()
+            self.displayState = WpDisplayState.LOG
         elif position[1] > self.screenSize//2:
             self.displayState = WpDisplayState.INFO
         else:

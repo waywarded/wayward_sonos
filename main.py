@@ -23,6 +23,9 @@ logging.basicConfig(
         logging.StreamHandler()  # still prints to terminal when launched via SSH
     ]
 )
+# the recent lines worth reading on the screen itself (quit confirm > Log), for when SSH can't reach it
+from wp_log_view import logBuffer
+logging.getLogger().addHandler(logBuffer)
 
 # two copies would fight over the screen and the speakers, so only one may run however it's started.
 # the OS drops the lock when the process dies, so a crash never leaves it stuck.
@@ -64,6 +67,9 @@ def main():
     wpStatus.updateAppState(WpAppState.LOADING)
     wpConfig = WPConfig(configPath, displayConfigPath)
     wpStatus.log("Configuration loaded.", logging.INFO)
+    logPatterns = wpConfig.getSubkey('display', 'log_view_patterns', None)
+    if logPatterns is not None:
+        logBuffer.setPatterns(logPatterns)
     wpStatus.logSilent("Required Devices: " + str(wpConfig.getRequiredDevices()), logging.INFO)
 
     # Initialize display

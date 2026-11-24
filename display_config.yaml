@@ -122,6 +122,10 @@ layout:
   clock_problem_font_asset: 'assets/FiraSans-Regular.ttf'
   clock_time_y: 350
   clock_problem_y: 590
+  clock_network_font_size: 17     # Wi-Fi network, frequency and address, under everything else
+  clock_network_font_asset: 'assets/FiraSans-Regular.ttf'
+  clock_network_y: 640
+  clock_network_refresh: 30
   favs_clock_button_pos: [265, 45]     # left of the Favorites title, mirroring refresh on the right
 
   log_font_size: 17

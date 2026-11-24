@@ -1,4 +1,9 @@
 import math
+import re
+import socket
+import subprocess
+import sys
+import threading
 import time
 
 import pygame
@@ -23,6 +28,14 @@ class WpClockDisplay:
         self.gap = config.getSubkey('layout', 'clock_gap', 6)
         self.problemY = config.getSubkey('layout', 'clock_problem_y', 590)
         self.surfaces = {}      # text -> rendered surface, since only the minute changes
+        # the Wi-Fi network, frequency and address, small at the bottom, for seeing when a display has moved
+        self.networkFont = parent.getFontForElement('clock_network')
+        self.networkColor = config.getSubkey('layout', 'clock_network_color', [110, 110, 110])
+        self.networkY = config.getSubkey('layout', 'clock_network_y', 640)
+        self.networkRefresh = config.getSubkey('layout', 'clock_network_refresh', 30)
+        self.network = ''
+        self.networkCheckedAt = None
+        self.networkChecking = False
 
     def text(self, font, text, color):
         key = (id(font), text, tuple(color))
@@ -68,6 +81,57 @@ class WpClockDisplay:
         if problem:
             surf = self.text(self.problemFont, problem, self.problemColor)
             screen.blit(surf, surf.get_rect(center=(self.screenSize // 2, self.problemY)))
+
+        self.checkNetwork()
+        if self.network:
+            surf = self.text(self.networkFont, self.network, self.networkColor)
+            screen.blit(surf, surf.get_rect(center=(self.screenSize // 2, self.networkY)))
+
+    # looked up on its own thread every networkRefresh seconds while the clock is up, since iw can take a moment
+    def checkNetwork(self):
+        now = time.monotonic()
+        if self.networkChecking or (self.networkCheckedAt is not None and now - self.networkCheckedAt < self.networkRefresh):
+            return
+        self.networkChecking = True
+
+        def work():
+            try:
+                self.network = currentNetwork()
+            finally:
+                self.networkCheckedAt = time.monotonic()
+                self.networkChecking = False
+        threading.Thread(target=work, daemon=True, name='clock network').start()
+
+
+# "Repeater · 5200 MHz · 192.168.5.35": the Wi-Fi network and frequency where the system says (the Pi; macOS hides
+# the network name from apps), and this machine's address, from the route a packet would take (nothing is sent)
+def currentNetwork():
+    address = ''
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(('8.8.8.8', 80))
+        address = sock.getsockname()[0]
+    except OSError:
+        pass
+    finally:
+        sock.close()
+    if not address or address.startswith(('0.', '127.', '169.254.')):
+        return 'No network'
+
+    parts = []
+    if sys.platform.startswith('linux'):
+        try:
+            link = subprocess.run(['iw', 'dev', 'wlan0', 'link'], capture_output=True, text=True, timeout=3).stdout
+            ssid = re.search(r'SSID: (.+)', link)
+            freq = re.search(r'freq: (\d+)', link)
+            if ssid:
+                parts.append(ssid.group(1).strip())
+            if freq:
+                parts.append(f"{freq.group(1)} MHz")
+        except (OSError, subprocess.SubprocessError):
+            pass
+    parts.append(address)
+    return ' · '.join(parts)
 
 
 # a small clock face for the button that opens clock mode, drawn so no asset is needed

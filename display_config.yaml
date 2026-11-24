@@ -108,6 +108,22 @@ layout:
 
   # the log screen: warnings, errors, and the connection/network lines (display: log_view_patterns overrides
   # which info lines show), newest at the bottom; the side arrows page back and forward
+  # clock mode: after clock_idle_time seconds on now playing with nothing playing or not connected, or from
+  # the clock button on favorites; a tap goes back, and so does playback starting
+  clock_idle_time: 300
+  clock_fade_time: 0.6     # leaving the clock, it fades out over now playing
+  clock_time_font_size: 200
+  clock_time_font_asset: 'assets/FiraSans-Light.ttf'
+  clock_day_font_size: 44
+  clock_day_font_asset: 'assets/FiraSans-Regular.ttf'
+  clock_date_font_size: 44
+  clock_date_font_asset: 'assets/FiraSans-Regular.ttf'
+  clock_problem_font_size: 26
+  clock_problem_font_asset: 'assets/FiraSans-Regular.ttf'
+  clock_time_y: 350
+  clock_problem_y: 590
+  favs_clock_button_pos: [265, 45]     # left of the Favorites title, mirroring refresh on the right
+
   log_font_size: 17
   log_font_asset: 'assets/PublicSans-Medium.ttf'
   log_top: 105

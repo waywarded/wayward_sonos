@@ -25,6 +25,7 @@ class WPAppStatus:
         self.mainRoom = None
         self.roomsRefreshRequested = False
         self.resyncRequested = False
+        self.noNetwork = False      # set by the Sonos thread when this machine has no network at all
         self.roomPending = None         # the room being added or removed, while the command is queued or running
         self.roomFailure = None         # (message, time.monotonic()) of the last failed add or remove
         self.mainRoomRequested = None   # a room picked as the new main room, for the Sonos thread

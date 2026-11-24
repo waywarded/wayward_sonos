@@ -15,6 +15,7 @@ from wp_rooms_display import WpRoomsDisplay
 from wp_volume_dial import WpVolumeDial
 from wp_command_feedback import WpCommandFeedback
 from wp_log_view import WpLogView
+from wp_clock_display import WpClockDisplay, clockIcon
 from wp_soco import NowPlayingInfo
 
 from enum import Enum
@@ -26,6 +27,7 @@ class WpDisplayState(Enum):
     VOLUME="Volume"
     QUIT_CONFIRM="QuitConfirm"
     LOG="Log"
+    CLOCK="Clock"
     QUITTING="Quitting"
 
 class WPDisplay:
@@ -220,6 +222,24 @@ class WPDisplay:
         self.roomsRefreshGap = config.getSubkey('layout', 'rooms_refresh_button_gap', 22)
 
         self.logView = WpLogView(config, self)
+        self.clockDisplay = WpClockDisplay(config, appStatus, self)
+        # the clock comes up after clock_idle_time seconds on now playing with nothing playing, or not connected
+        self.clockIdleTime = config.getSubkey('layout', 'clock_idle_time', 300)
+        self.idleTime = 0.0
+        self.clockSawStopped = False    # leaves on its own only when playback starts after being stopped
+        self.clockFadeTime = config.getSubkey('layout', 'clock_fade_time', 0.6)
+        self.clockFade = 0.0            # 1 just after leaving the clock, down to 0 as it fades out
+        # no alpha channel: on the Mac the window's format has one, a plain Surface inherits it, and the clock's
+        # text then left see-through boxes that flashed now playing through as it faded
+        self.clockLayer = pygame.Surface((self.screenSize, self.screenSize), 0, 32)
+        clockButtonSize = config.getSubkey('layout', 'favs_refresh_button_size', [30, 30])
+        # favorites' header, mirroring its refresh button on the other side of the title
+        self.favsClockButton = WPDisplayButton(
+            config.getSubkey('layout', 'favs_clock_button_pos', [265, 45]),
+            clockButtonSize,
+            clockIcon(clockButtonSize[0]),
+            hitPadding=hitPadding
+        )
         self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)
         self.roomsDisplay = WpRoomsDisplay(config, appStatus, self)
         self.volumeDial = WpVolumeDial(config, appStatus, self)
@@ -664,6 +684,47 @@ class WPDisplay:
         if self.favsRefreshButton:
             self.favsRefreshButton.setEnabled(not self.wpStatus.favsRefreshPending())
             self.favsRefreshButton.render(panel)
+        self.favsClockButton.render(panel)
+
+    def isPlaying(self):
+        trackInfo = self.wpStatus.latestTrackInfo
+        return self.wpStatus.appState == WpAppState.CONNECTED and trackInfo is not None and trackInfo.isPlaying()
+
+    def openClock(self):
+        self.favsSlide = self.favsSlideTarget = 0.0
+        self.clockSawStopped = not self.isPlaying()
+        self.displayState = WpDisplayState.CLOCK
+
+    # counts only while now playing is up with nothing playing (or not connected); any tap starts it over
+    def updateIdle(self, deltaTime):
+        if self.displayState != WpDisplayState.INFO or self.isPlaying():
+            self.idleTime = 0.0
+            return
+        self.idleTime += deltaTime
+        if self.idleTime >= self.clockIdleTime:
+            self.openClock()
+
+    def updateClock(self):
+        if not self.isPlaying():
+            self.clockSawStopped = True
+        elif self.clockSawStopped:
+            self.closeClock()
+
+    # the clock fades out over whatever is underneath, over clock_fade_time
+    def closeClock(self):
+        self.idleTime = 0.0
+        self.displayState = WpDisplayState.INFO
+        self.clockFade = 1.0
+
+    def renderClockFade(self, deltaTime):
+        if self.clockFade <= 0:
+            return
+        self.clockDisplay.render(self.clockLayer)
+        self.clockLayer.set_alpha(int(255 * self.clockFade))
+        self.screen.blit(self.clockLayer, (0, 0))
+        # a slow frame (the first draw of now playing after a while) moves the fade one normal step, not a jump
+        step = min(deltaTime, 1 / 20)
+        self.clockFade = max(0.0, self.clockFade - (step / self.clockFadeTime if self.clockFadeTime > 0 else 1.0))
 
     def drawRoomsPanel(self, panel):
         title = self.roomsDisplay.title()
@@ -707,6 +768,9 @@ class WPDisplay:
             self.displayState = WpDisplayState.QUIT_CONFIRM
 
     def render(self, deltaTime):
+        self.updateIdle(deltaTime)
+        if self.displayState == WpDisplayState.CLOCK:
+            self.updateClock()
         if self.displayState == WpDisplayState.INFO:
             self.updateQuitHold(deltaTime)
         if self.displayState == WpDisplayState.INFO:
@@ -724,6 +788,9 @@ class WPDisplay:
         elif self.displayState == WpDisplayState.LOG:
             self.logView.render(self.screen)
             self.favsBackButton.render(self.screen)
+        elif self.displayState == WpDisplayState.CLOCK:
+            self.clockDisplay.render(self.screen)
+        self.renderClockFade(deltaTime)
 
         if self.roundMask:
             self.renderRoundMask()
@@ -791,8 +858,12 @@ class WPDisplay:
 
     def handleTap(self, position):
         self.wpStatus.logSilent(f"Tap: {str(position)}")
+        self.idleTime = 0.0
 
-        if self.displayState == WpDisplayState.QUIT_CONFIRM:
+        if self.displayState == WpDisplayState.CLOCK:
+            # a tap only wakes it: back to now playing (or the connecting screen, which keeps retrying)
+            self.closeClock()
+        elif self.displayState == WpDisplayState.QUIT_CONFIRM:
             self.handleTapConfirm(position)
         elif self.displayState == WpDisplayState.LOG:
             # the down arrow, or anywhere but the page arrows, goes back
@@ -844,6 +915,8 @@ class WPDisplay:
             self.closeFavorites()
         elif self.favsRefreshButton and self.favsRefreshButton.check_tap(position):
             self.wpStatus.requestFavsRefresh()
+        elif self.favsClockButton.check_tap(position):
+            self.openClock()
         elif self.favContentDisplay.checkPageTap(position):
             pass
         elif self.favContentDisplay.checkTileTap(position):

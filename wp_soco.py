@@ -9,6 +9,7 @@ import time
 import queue
 import random
 import re
+import socket
 
 from soco.core import DidlPlaylistContainer, MUSIC_SRC_RADIO
 from soco.events import event_listener
@@ -131,6 +132,7 @@ class WPSoco:
         self.shuffleArtists = config.getSubkey('favorites', 'artists', [])
         self.radioLibraryArt = config.getSubkey('favorites', 'radio_library_art', True)
         self.radioLookup = (None, None)     # ((artist, title), library track or None), so each song is looked up once
+        self.lastSpeakerIp = None     # for hasNetwork: the route to it shows whether this machine is on the network
         if config.getSubkey('favorites', 'load_via', 'local') == 'cloud':
             cloud = WPSonosCloud(timeout=config.getSubkey('connection', 'cloud_timeout', 30))
             if cloud.ready():
@@ -168,6 +170,7 @@ class WPSoco:
         for device in devices:
             if device.player_name == mainDeviceName:
                 self.mainDevice = device
+                self.lastSpeakerIp = device.ip_address
                 self.status.log(f"Found '{mainDeviceName}'", logging.INFO)
                 self.status.updateStatus(f"Found {mainDeviceName}")
                 return
@@ -179,10 +182,11 @@ class WPSoco:
             for device in devices:
                 if device.player_name == configMain:
                     self.mainDevice = device
+                    self.lastSpeakerIp = device.ip_address
                     self.status.log(f"Using the config's main room '{configMain}' instead", logging.INFO)
                     self.status.updateStatus(f"Found {configMain}")
                     return
-        self.status.updateStatus(f"Can't find {mainDeviceName}")
+        self.status.updateStatus(f"{mainDeviceName} device not found")
 
     def listHouseholdDevices(self):
         self.status.logSilent("-----Devices on main household-----")
@@ -446,7 +450,38 @@ class WPSoco:
         self.status.updateStatus(
             f"Attached to '{self.mainDevice.player_name}'")
 
+    # whether this machine has an address it could reach the speakers from at all: a UDP connect only picks
+    # the route and the local address, nothing is sent. no route, or only a self-assigned 169.254 address,
+    # means Wi-Fi is down rather than the speakers being away
+    def hasNetwork(self):
+        for target in (self.lastSpeakerIp, '8.8.8.8'):
+            if not target:
+                continue
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                sock.connect((target, 1400))
+                address = sock.getsockname()[0]
+                if address and not address.startswith(('0.', '127.', '169.254.')):
+                    return True
+            except OSError:
+                pass
+            finally:
+                sock.close()
+        return False
+
     def tryConnect(self):
+        if not self.hasNetwork():
+            # said once per outage, so the retries every few seconds don't flood the log
+            if not self.status.noNetwork:
+                self.status.log("No network: this machine has no usable network address", logging.WARNING)
+            self.status.noNetwork = True
+            self.status.updateStatus("No network")
+            self.sub = None
+            self.status.updateAppState(WpAppState.NO_CONNECTION)
+            return
+        if self.status.noNetwork:
+            self.status.log("Network is back", logging.WARNING)
+        self.status.noNetwork = False
         try:
             if self.sub:
                 try:

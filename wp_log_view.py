@@ -13,7 +13,7 @@ from wp_display_button import WPDisplayButton
 class WpLogBuffer(logging.Handler):
     DEFAULT_PATTERNS = [r'Subscrib', r'address changed', r'come to', r'Attached to', r'Found ', r'not found',
                         r'Discover', r'No Sonos devices', r'Main room is now', r'Fix screen', r'TRYCONNECT',
-                        r'App status: (Looking|Couldn|No speakers|Can\'t)']
+                        r'App status: (Looking|Couldn|No speakers|.* device not found)']
 
     def __init__(self, size=300):
         super().__init__(level=logging.INFO)

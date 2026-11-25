@@ -48,6 +48,15 @@ class WpClockDisplay:
         self.artDeepen = config.getSubkey('layout', 'clock_art_deepen', 255)    # 0-255, see prepareArt
         self.lightThreshold = config.getSubkey('layout', 'clock_art_light_threshold', 160)
         self.shadowOffset = config.getSubkey('layout', 'clock_shadow_offset', 2)
+        # clock_backing 'band' or 'box' puts see-through black behind the text over art, which is then shown
+        # as it is (no darkening, no dark text); 'none' for the soft shadow straight on darkened art
+        self.backing = config.getSubkey('layout', 'clock_backing', 'band')
+        if self.backing not in ('band', 'box'):
+            self.backing = None
+        self.backingAlpha = config.getSubkey('layout', 'clock_backing_alpha', 190)
+        self.backingPadding = config.getSubkey('layout', 'clock_backing_padding', 20)
+        self.backingRadius = config.getSubkey('layout', 'clock_backing_radius', 28)
+        self.hardShadowOffset = config.getSubkey('layout', 'clock_hard_shadow_offset', 3)
         self.shadowBlur = config.getSubkey('layout', 'clock_shadow_blur', 6)
         self.shadowStrength = config.getSubkey('layout', 'clock_shadow_strength', 3)
         self.shadowColor = config.getSubkey('layout', 'clock_shadow_color', [0, 0, 0])
@@ -101,17 +110,23 @@ class WpClockDisplay:
 
     def render(self, screen):
         light = self.renderArt(screen)
-        shadow = self.art is not None
+        hasArt = self.art is not None
+        backing = self.backing if hasArt else None
+        if backing:
+            light = False
         timeColor, textColor, problemColor, shadowColor = (
             (self.darkTimeColor, self.darkTextColor, self.darkProblemColor, self.darkShadowColor) if light else
-            (self.timeColor, self.artTextColor if shadow else self.textColor, self.problemColor, self.shadowColor))
+            (self.timeColor, self.artTextColor if hasArt else self.textColor, self.problemColor, self.shadowColor))
         now = time.localtime()
         clock = f"{int(time.strftime('%I', now))}:{now.tm_min:02d}"
         day = time.strftime('%A', now)
         date = f"{time.strftime('%b', now)} {now.tm_mday}"
 
+        # on a backing, a hard shadow (an offset black copy); straight on the art, a soft one
         def draw(font, text, color, pos, offset):
-            if shadow:
+            if backing:
+                screen.blit(self.text(font, text, self.shadowColor), (pos[0] + offset, pos[1] + offset))
+            elif hasArt:
                 surf, pad = self.shadow(font, text, shadowColor)
                 screen.blit(surf, (pos[0] + offset - pad, pos[1] + offset - pad))
             screen.blit(self.text(font, text, color), pos)
@@ -120,17 +135,22 @@ class WpClockDisplay:
         # the digits' own height, not the font's line height, so the day and date sit close to them
         timeRect = timeSurf.get_bounding_rect()
         top = self.centerY - timeRect.height // 2
-        draw(self.timeFont, clock, timeColor,
-             (self.screenSize // 2 - timeRect.width // 2 - timeRect.x, top - timeRect.y), self.shadowOffset)
-
-        small = max(1, self.shadowOffset - 1)
         dayRect = self.text(self.dayFont, day, textColor).get_bounding_rect()
-        draw(self.dayFont, day, textColor, (self.screenSize // 2 - dayRect.width // 2 - dayRect.x,
-                                            top - self.gap - dayRect.height - dayRect.y - self.gap * 3), small)
-
+        dayTop = top - self.gap - dayRect.height - self.gap * 3
         dateRect = self.text(self.dateFont, date, textColor).get_bounding_rect()
-        draw(self.dateFont, date, textColor, (self.screenSize // 2 - dateRect.width // 2 - dateRect.x,
-                                              top + timeRect.height + self.gap * 4 - dateRect.y), small)
+        dateTop = top + timeRect.height + self.gap * 4
+
+        if backing:
+            width = max(timeRect.width, dayRect.width, dateRect.width)
+            self.renderBacking(screen, backing, dayTop, dateTop + dateRect.height, width)
+
+        offset = self.hardShadowOffset if backing else self.shadowOffset
+        small = max(1, offset - 1)
+        draw(self.timeFont, clock, timeColor,
+             (self.screenSize // 2 - timeRect.width // 2 - timeRect.x, top - timeRect.y), offset)
+        draw(self.dayFont, day, textColor, (self.screenSize // 2 - dayRect.width // 2 - dayRect.x, dayTop - dayRect.y), small)
+        draw(self.dateFont, date, textColor,
+             (self.screenSize // 2 - dateRect.width // 2 - dateRect.x, dateTop - dateRect.y), small)
 
         problem = self.problem()
         if problem:
@@ -139,9 +159,26 @@ class WpClockDisplay:
 
         self.checkNetwork()
         if self.network:
-            color = textColor if shadow else self.networkColor
+            color = textColor if hasArt else self.networkColor
             rect = self.text(self.networkFont, self.network, color).get_rect(center=(self.screenSize // 2, self.networkY))
             draw(self.networkFont, self.network, color, rect.topleft, 1)
+
+    # see-through black behind the day, time and date: a band across the screen like now playing's, or a box
+    def renderBacking(self, screen, kind, top, bottom, width):
+        pad = self.backingPadding
+        if kind == 'box':
+            rect = pygame.Rect(0, 0, width + pad * 4, bottom - top + pad * 2)
+        else:
+            rect = pygame.Rect(0, 0, self.screenSize, bottom - top + pad * 2)
+        key = ('backing', kind, rect.size)
+        if key not in self.surfaces:
+            surf = pygame.Surface(rect.size, pygame.SRCALPHA)
+            if kind == 'box':
+                pygame.draw.rect(surf, (0, 0, 0, self.backingAlpha), surf.get_rect(), border_radius=self.backingRadius)
+            else:
+                surf.fill((0, 0, 0, self.backingAlpha))
+            self.surfaces[key] = surf
+        screen.blit(self.surfaces[key], (self.screenSize // 2 - rect.width // 2, top - pad))
 
     # the background, art or plain; returns whether what's behind the text is light
     def renderArt(self, screen):
@@ -151,10 +188,15 @@ class WpClockDisplay:
             return False
         sinceShown = time.monotonic() - self.artShownAt
         fade = min(1.0, sinceShown / self.artFade) if self.artFade > 0 else 1.0
-        if self.previousArt is not None and fade < 1.0:
-            screen.blit(self.previousArt[0], (0, 0))
-        surf = self.art[0]
-        surf.set_alpha(int(255 * fade))
+        # through black: the old cover fades out over the first half, the new one in over the second, so each
+        # change is plain to see. the first one just fades in
+        if self.previousArt is None:
+            surf, alpha = self.art[0], fade
+        elif fade < 0.5:
+            surf, alpha = self.previousArt[0], 1 - fade * 2
+        else:
+            surf, alpha = self.art[0], fade * 2 - 1
+        surf.set_alpha(int(255 * alpha))
         screen.blit(surf, (0, 0))
         surf.set_alpha(None)
         # the text turns over halfway through the fade
@@ -211,6 +253,8 @@ class WpClockDisplay:
         rect = pygame.Rect(self.screenSize // 6, self.screenSize // 4, self.screenSize * 2 // 3, self.screenSize // 2)
         r, g, b = pygame.transform.average_color(surf, rect)[:3]
         light = 0.299 * r + 0.587 * g + 0.114 * b > self.lightThreshold
+        if self.backing:
+            return (surf, False, path)
         if light:
             return (surf, light, path)
         # darkened by multiplying the cover by itself: darks and mids drop a lot, bright colours stay bright, so

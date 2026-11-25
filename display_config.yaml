@@ -113,7 +113,7 @@ layout:
   clock_idle_time: 300
   clock_fade_time: 0.6     # leaving the clock, it fades out over now playing
   clock_time_font_size: 200
-  clock_time_font_asset: 'assets/FiraSans-Regular.ttf'
+  clock_time_font_asset: 'assets/FiraSans-Light.ttf'
   clock_day_font_size: 44
   clock_day_font_asset: 'assets/FiraSans-Regular.ttf'
   clock_date_font_size: 44
@@ -131,11 +131,18 @@ layout:
   clock_art_folder: 'art_cache'
   clock_art_count: 40
   clock_art_interval: 60
-  clock_art_fade: 2.0
+  clock_art_fade: 2.0     # out to black and in again
   clock_art_deepen: 255     # 0-255: darkens by multiplying the cover by itself, keeping colours rich
   clock_art_dim: 50       # 0-255 of black over that, taming the bright parts
   clock_art_light_threshold: 160      # 0-255 average brightness behind the text that counts as light
   clock_shadow_offset: 2
+  # 'band' (across the screen, like now playing's) or 'box' (rounded) of see-through black behind the text over
+  # art, shown undarkened; 'none' for the soft shadow straight on the art, darkened or with dark text as above
+  clock_backing: band
+  clock_backing_alpha: 190
+  clock_backing_padding: 20
+  clock_backing_radius: 28     # the box's corners
+  clock_hard_shadow_offset: 3     # the text's shadow on a backing
   clock_shadow_blur: 6     # how soft the shadow is, in pixels
   clock_shadow_strength: 3     # layers of it: denser and darker
   favs_clock_button_pos: [265, 45]     # left of the Favorites title, mirroring refresh on the right

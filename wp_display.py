@@ -90,6 +90,8 @@ class WPDisplay:
         self.albumBaseY = config.getSubkey('layout', 'album_text_y', self.screenSize // 2)
         self.textBandAlpha = config.getSubkey('layout', 'text_band_alpha', 150)
         self.textBandSurface = None
+        self.textBandFeather = config.getSubkey('layout', 'text_band_feather', 0)     # soft top and bottom edges
+        self.textBandEdgeSurface = None
         # tapping the band fades it and its text out, to see the whole cover, and back in
         self.textHidden = False
         self.textFade = 1.0         # how much of the band and its text shows, 0 to 1
@@ -394,12 +396,27 @@ class WPDisplay:
                 self.textBandSurface = pygame.Surface((self.screenSize, height), pygame.SRCALPHA)
                 self.textBandSurface.fill((0, 0, 0, self.textBandAlpha))
             target.blit(self.textBandSurface, (0, self.textBandTop))
+            if self.textBandFeather > 0:
+                edge = self.textBandEdge()
+                target.blit(edge, (0, self.textBandTop - self.textBandFeather))
+                target.blit(pygame.transform.flip(edge, False, True), (0, self.textBandBottom))
         for item in textItems:
             item.render(target)
 
         if target is self.textLayer:
             self.textLayer.set_alpha(int(255 * self.textFade))
             self.screen.blit(self.textLayer, (0, 0))
+
+    # the band's soft edge: clear to its own darkness over text_band_feather pixels, eased so there's no line
+    def textBandEdge(self):
+        if self.textBandEdgeSurface is None:
+            surf = pygame.Surface((self.screenSize, self.textBandFeather), pygame.SRCALPHA)
+            for y in range(self.textBandFeather):
+                t = (y + 0.5) / self.textBandFeather
+                t = t * t * (3 - 2 * t)
+                pygame.draw.line(surf, (0, 0, 0, int(self.textBandAlpha * t)), (0, y), (self.screenSize, y))
+            self.textBandEdgeSurface = surf
+        return self.textBandEdgeSurface
 
     # the artist, or the album for album_show_time of each cycle, faded out and in at the swaps
     def artistOrAlbum(self, trackInfo, deltaTime):

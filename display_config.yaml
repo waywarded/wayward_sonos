@@ -77,6 +77,7 @@ layout:
   text_band_padding: 10
   text_band_single_line_padding: 8     # one-line titles: this much more room above and below the text
   text_band_alpha: 210
+  text_band_feather: 40     # the band fades out above and below over this many pixels; 0 for hard edges
   text_fade_time: 0.4      # tap the band: it and its text fade out to show the whole cover; tap again to bring them back
   # the spinner and the favorite being started, on top of everything
   command_feedback_y: 360

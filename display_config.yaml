@@ -32,6 +32,7 @@ layout:
   artist_show_time: 8
   album_show_time: 4
   radio_show_time: 4       # a sub/wave station's show, after the album
+  radio_show_every: 2      # ...after every 2nd artist and album
   radio_show_marks: ['» ', ' «']    # around the show line, so it doesn't read as an album
   radio_show_host_font_asset: 'assets/PublicSans-Medium.ttf'    # "with Wren"; the show's name uses the album font
   artist_album_fade_time: 1.0

@@ -113,6 +113,7 @@ class WPDisplay:
         self.artistShowTime = config.getSubkey('layout', 'artist_show_time', 8.0)
         self.albumShowTime = config.getSubkey('layout', 'album_show_time', 4.0)
         self.radioShowTime = config.getSubkey('layout', 'radio_show_time', self.albumShowTime)
+        self.radioShowEvery = max(1, config.getSubkey('layout', 'radio_show_every', 2))
         self.artistAlbumFadeTime = config.getSubkey('layout', 'artist_album_fade_time', 0.4)
         self.artistAlpha = config.getSubkey('layout', 'artist_text_alpha', 255)
         self.albumAlpha = config.getSubkey('layout', 'album_text_alpha', 255)
@@ -460,8 +461,8 @@ class WPDisplay:
             except Exception as e:
                 self.wpStatus.logSilent(f"Band colour: {e}")
 
-    # the artist, then the album for album_show_time, then a radio show for radio_show_time, each faded out and
-    # in at the swaps
+    # the artist, then the album for album_show_time, each faded out and in at the swaps; every radio_show_every
+    # of those rounds is followed by a radio show for radio_show_time
     def artistOrAlbum(self, trackInfo, deltaTime):
         fade = self.artistAlbumFadeTime
         track = (trackInfo.title, trackInfo.artist, trackInfo.album)
@@ -472,7 +473,15 @@ class WPDisplay:
         if trackInfo.album and trackInfo.album != trackInfo.artist:
             turns.append((self.albumTextItem, self.albumAlpha, self.albumShowTime))
         if trackInfo.show:
-            turns.append((self.showTextItem, self.albumAlpha, self.radioShowTime))
+            turns = turns * self.radioShowEvery + [(self.showTextItem, self.albumAlpha, self.radioShowTime)]
+            # with no album the artist comes round twice in a row: one longer showing, not a fade out and back
+            merged = []
+            for turn in turns:
+                if merged and merged[-1][0] is turn[0]:
+                    merged[-1] = (turn[0], turn[1], merged[-1][2] + 2 * fade + turn[2])
+                else:
+                    merged.append(turn)
+            turns = merged
         if len(turns) == 1:
             self.artistTextItem.setAlpha(self.artistAlpha)
             return self.artistTextItem

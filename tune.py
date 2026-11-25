@@ -12,8 +12,12 @@ CONFIG = os.path.join(HERE, 'display_config.yaml')
 SCREENS = {
     'n': ('now playing', {
         'f': ('feather', 'text_band_feather', 'soft edge height in pixels, 0 for hard'),
-        'm': ('margin', 'text_band_padding', 'space above the title in pixels'),
+        't': ('top margin', 'text_band_padding', 'space above the title in pixels'),
+        'b': ('bottom margin', 'text_band_bottom_margin', 'space below the artist in pixels'),
         'o': ('opacity', 'text_band_alpha', '0 see-through to 255 solid'),
+    }),
+    't': ('band tint (both screens)', {
+        'l': ('lightness', 'band_tint_lightness', '0-100 how light the colour from the cover looks'),
     }),
     'c': ('clock', {
         'f': ('feather', 'clock_backing_feather', 'soft edge height in pixels, 0 for hard'),
@@ -61,7 +65,7 @@ def main():
     while True:
         print()
         summary()
-        choice = ask("[n]ow playing, [c]lock, [r]eset all to the repo's values, [q]uit: ")
+        choice = ask("[n]ow playing, [c]lock, [t]int, [r]eset all to the repo's values, [q]uit: ")
         if choice == 'q':
             break
         if choice == 'r':
@@ -72,16 +76,24 @@ def main():
         if choice not in SCREENS:
             continue
         name, settings = SCREENS[choice]
-        choice = ask(f"{name}: [f]eather, [m]argin, [o]pacity: ")
+        if len(settings) == 1:
+            choice = next(iter(settings))
+        else:
+            choice = ask(f"{name}: " + ', '.join(f"[{k}]{label[1:]}" for k, (label, _, _) in settings.items()) + ": ")
         if choice not in settings:
             continue
         label, key, hint = settings[choice]
         value = ask(f"{name} {label} is {current(key)} ({hint}). New value: ")
-        if not re.fullmatch(r'\d+', value):
+        if not re.fullmatch(r'-?\d+', value):
             print("Not changed: needs a whole number.")
             continue
-        if key.endswith('alpha') and int(value) > 255:
-            value = '255'
+        # margins can go below zero, to pull the band in over the text; the rest can't
+        if key.endswith('alpha'):
+            value = str(max(0, min(255, int(value))))
+        elif key.endswith('lightness'):
+            value = str(max(0, min(100, int(value))))
+        elif not key.endswith(('padding', 'margin')):
+            value = str(max(0, int(value)))
         if setValue(key, value):
             print(f"{key}: {value}")
             changed = True

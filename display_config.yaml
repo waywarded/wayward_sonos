@@ -74,10 +74,17 @@ layout:
   # a see-through black band across the screen behind the title, artist and album. Its bottom sits just above
   # the controls; its top is text_band_padding above the title, so it's shorter for one-line titles
   text_band_bottom: 590
-  text_band_padding: 10
+  text_band_padding: 5
+  # set, the bottom follows the text too: this far below the artist line, in place of text_band_bottom, and both
+  # margins are from the text to where the soft edge starts. leave it out for the fixed bottom
+  text_band_bottom_margin: 5
   text_band_single_line_padding: 8     # one-line titles: this much more room above and below the text
-  text_band_alpha: 210
-  text_band_feather: 40     # the band's top and bottom fade out over this many pixels, centred on its edges; 0 for hard
+  text_band_alpha: 200
+  text_band_feather: 30     # the band's top and bottom fade out over this many pixels, centred on its edges; 0 for hard
+  # now playing's and the clock's bands tinted a dark version of the cover's main colour; false for black
+  band_tint: true
+  band_tint_lightness: 20     # 0-100: how light the tint looks, the same for every colour
+  band_tint_saturation: 1.0     # less than 1 for a greyer tint
   text_fade_time: 0.4      # tap the band: it and its text fade out to show the whole cover; tap again to bring them back
   # the spinner and the favorite being started, on top of everything
   command_feedback_y: 360

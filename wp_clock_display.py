@@ -9,6 +9,7 @@ import threading
 import time
 
 import pygame
+from wp_art_color import bandColor
 from wp_app_state import WpAppState
 
 
@@ -54,6 +55,10 @@ class WpClockDisplay:
         if self.backing not in ('band', 'box'):
             self.backing = None
         self.backingAlpha = config.getSubkey('layout', 'clock_backing_alpha', 190)
+        self.bandTint = config.getSubkey('layout', 'band_tint', False)
+        self.bandTintLightness = config.getSubkey('layout', 'band_tint_lightness', 25)
+        self.bandTintSaturation = config.getSubkey('layout', 'band_tint_saturation', 1.0)
+        self.backingColor = (0, 0, 0)       # the art's band colour, set as the art is drawn
         self.backingPadding = config.getSubkey('layout', 'clock_backing_padding', 20)
         self.backingRadius = config.getSubkey('layout', 'clock_backing_radius', 28)
         self.backingFeather = config.getSubkey('layout', 'clock_backing_feather', 0)     # band only
@@ -170,17 +175,20 @@ class WpClockDisplay:
         # a band's soft edges are centred on its edges, half inside and half out, like now playing's
         inset = self.backingFeather // 2 if kind == 'band' else 0
         top, bottom = top + inset, bottom - inset
+        # a big negative margin can squeeze it to nothing
+        height = max(1, bottom - top + pad * 2)
         if kind == 'box':
-            rect = pygame.Rect(0, 0, width + pad * 4, bottom - top + pad * 2)
+            rect = pygame.Rect(0, 0, max(1, width + pad * 4), height)
         else:
-            rect = pygame.Rect(0, 0, self.screenSize, bottom - top + pad * 2)
-        key = ('backing', kind, rect.size)
+            rect = pygame.Rect(0, 0, self.screenSize, height)
+        key = ('backing', kind, rect.size, self.backingColor)
         if key not in self.surfaces:
             surf = pygame.Surface(rect.size, pygame.SRCALPHA)
             if kind == 'box':
-                pygame.draw.rect(surf, (0, 0, 0, self.backingAlpha), surf.get_rect(), border_radius=self.backingRadius)
+                pygame.draw.rect(surf, (*self.backingColor, self.backingAlpha), surf.get_rect(),
+                                 border_radius=self.backingRadius)
             else:
-                surf.fill((0, 0, 0, self.backingAlpha))
+                surf.fill((*self.backingColor, self.backingAlpha))
             self.surfaces[key] = surf
         screen.blit(self.surfaces[key], (self.screenSize // 2 - rect.width // 2, top - pad))
         if kind == 'band' and self.backingFeather > 0:
@@ -190,13 +198,13 @@ class WpClockDisplay:
 
     # the band's soft edge: from clear to its own darkness over clock_backing_feather pixels, eased so there's no line
     def featherEdge(self, width):
-        key = ('feather', width, self.backingFeather)
+        key = ('feather', width, self.backingFeather, self.backingColor)
         if key not in self.surfaces:
             surf = pygame.Surface((width, self.backingFeather), pygame.SRCALPHA)
             for y in range(self.backingFeather):
                 t = (y + 0.5) / self.backingFeather
                 t = t * t * (3 - 2 * t)
-                pygame.draw.line(surf, (0, 0, 0, int(self.backingAlpha * t)), (0, y), (width, y))
+                pygame.draw.line(surf, (*self.backingColor, int(self.backingAlpha * t)), (0, y), (width, y))
             self.surfaces[key] = surf
         return self.surfaces[key]
 
@@ -220,9 +228,14 @@ class WpClockDisplay:
         screen.blit(surf, (0, 0))
         surf.set_alpha(None)
         # the text turns over halfway through the fade
-        if fade < 0.5:
-            return self.previousArt[1] if self.previousArt is not None else False
-        return self.art[1]
+        if fade < 0.5 and self.previousArt is not None:
+            shown = self.previousArt
+        else:
+            shown = self.art
+        if shown is None:
+            return False
+        self.backingColor = shown[3]
+        return shown[1]
 
     def updateArt(self):
         if self.artCache is None:
@@ -274,9 +287,9 @@ class WpClockDisplay:
         r, g, b = pygame.transform.average_color(surf, rect)[:3]
         light = 0.299 * r + 0.587 * g + 0.114 * b > self.lightThreshold
         if self.backing:
-            return (surf, False, path)
+            return (surf, False, path, self.artBandColor(surf))
         if light:
-            return (surf, light, path)
+            return (surf, light, path, self.artBandColor(surf))
         # darkened by multiplying the cover by itself: darks and mids drop a lot, bright colours stay bright, so
         # colours get richer where a black overlay makes them muddy. clock_art_deepen is how much of that to mix in
         if self.artDeepen > 0:
@@ -288,7 +301,10 @@ class WpClockDisplay:
             shade = pygame.Surface(size, 0, 32)
             shade.set_alpha(self.artDim)
             surf.blit(shade, (0, 0))
-        return (surf, light, path)
+        return (surf, light, path, self.artBandColor(surf))
+
+    def artBandColor(self, surf):
+        return bandColor(surf, self.bandTintLightness, self.bandTintSaturation) if self.bandTint else (0, 0, 0)
 
     # looked up on its own thread every networkRefresh seconds while the clock is up, since iw can take a moment
     def checkNetwork(self):

@@ -17,6 +17,7 @@ from wp_command_feedback import WpCommandFeedback
 from wp_log_view import WpLogView
 from wp_clock_display import WpClockDisplay, clockIcon
 from wp_art_cache import WpArtCache
+from wp_art_color import bandColor
 from wp_soco import NowPlayingInfo
 
 from enum import Enum
@@ -81,7 +82,11 @@ class WPDisplay:
         # the band's bottom stays put; its top follows the title, so one-line titles get a shorter band
         self.textBandBottom = config.getSubkey('layout', 'text_band_bottom', None)     # None for no band
         self.textBandPadding = config.getSubkey('layout', 'text_band_padding', 10)
+        # with text_band_bottom_margin the bottom follows the text too: that far below the artist and album line,
+        # and the margins are then from the text to where a soft edge starts, which fades away outwards
+        self.textBandBottomMargin = config.getSubkey('layout', 'text_band_bottom_margin', None)
         self.textBandTop = None
+        self.textBandBottomEdge = self.textBandBottom
         self.trackTextBottom = config.getSubkey('layout', 'track_text_bottom', None)   # None: centred on track_text_y
         self.skipButtonsFollowTitle = config.getSubkey('layout', 'skip_buttons_follow_title', False)
         # one-line titles: the text moves up this much and the band gains it at the top, so it isn't a thin strip
@@ -91,7 +96,13 @@ class WPDisplay:
         self.textBandAlpha = config.getSubkey('layout', 'text_band_alpha', 150)
         self.textBandSurface = None
         self.textBandFeather = config.getSubkey('layout', 'text_band_feather', 0)     # soft top and bottom edges
-        self.textBandEdges = {}     # height -> edge surface
+        self.textBandEdges = {}     # (height, colour) -> edge surface
+        # the bands are tinted a dark version of the cover's main colour (band_tint), black without
+        self.bandTint = config.getSubkey('layout', 'band_tint', False)
+        self.bandTintLightness = config.getSubkey('layout', 'band_tint_lightness', 25)
+        self.bandTintSaturation = config.getSubkey('layout', 'band_tint_saturation', 1.0)
+        self.textBandColor = (0, 0, 0)
+        self.textBandColorSource = None     # the art it was picked from
         # tapping the band fades it and its text out, to see the whole cover, and back in
         self.textHidden = False
         self.textFade = 1.0         # how much of the band and its text shows, 0 to 1
@@ -394,11 +405,16 @@ class WPDisplay:
             # soft edges are centred on the band's edges, half inside and half out, so it reaches only a little
             # further than a hard one would (into the controls, at the bottom)
             feather = self.textBandFeather
-            top, bottom = self.textBandTop + feather // 2, self.textBandBottom - feather // 2
-            height = bottom - top
-            if self.textBandSurface is None or self.textBandSurface.get_height() != height:
+            if self.textBandBottomMargin is None:
+                top, bottom = self.textBandTop + feather // 2, self.textBandBottom - feather // 2
+            else:
+                top, bottom = self.textBandTop, self.textBandBottomEdge
+            height = max(1, bottom - top)      # a big negative margin can squeeze it to nothing
+            self.updateTextBandColor()
+            if (self.textBandSurface is None or self.textBandSurface.get_height() != height
+                    or self.textBandSurface.get_at((0, 0))[:3] != self.textBandColor):
                 self.textBandSurface = pygame.Surface((self.screenSize, height), pygame.SRCALPHA)
-                self.textBandSurface.fill((0, 0, 0, self.textBandAlpha))
+                self.textBandSurface.fill((*self.textBandColor, self.textBandAlpha))
             target.blit(self.textBandSurface, (0, top))
             if feather > 0:
                 edge = self.textBandEdge(feather)
@@ -413,14 +429,29 @@ class WPDisplay:
 
     # the band's soft edge: clear to its own darkness over text_band_feather pixels, eased so there's no line
     def textBandEdge(self, height):
-        if height not in self.textBandEdges:
+        key = (height, self.textBandColor)
+        if key not in self.textBandEdges:
+            if len(self.textBandEdges) > 20:
+                self.textBandEdges.clear()
             surf = pygame.Surface((self.screenSize, height), pygame.SRCALPHA)
             for y in range(height):
                 t = (y + 0.5) / height
                 t = t * t * (3 - 2 * t)
-                pygame.draw.line(surf, (0, 0, 0, int(self.textBandAlpha * t)), (0, y), (self.screenSize, y))
-            self.textBandEdges[height] = surf
-        return self.textBandEdges[height]
+                pygame.draw.line(surf, (*self.textBandColor, int(self.textBandAlpha * t)), (0, y), (self.screenSize, y))
+            self.textBandEdges[key] = surf
+        return self.textBandEdges[key]
+
+    # picked again whenever the art changes
+    def updateTextBandColor(self):
+        if not self.bandTint or self.trackArtSurface is self.textBandColorSource:
+            return
+        self.textBandColorSource = self.trackArtSurface
+        self.textBandColor = (0, 0, 0)
+        if self.trackArtSurface is not None:
+            try:
+                self.textBandColor = bandColor(self.trackArtSurface, self.bandTintLightness, self.bandTintSaturation)
+            except Exception as e:
+                self.wpStatus.logSilent(f"Band colour: {e}")
 
     # the artist, or the album for album_show_time of each cycle, faded out and in at the swaps
     def artistOrAlbum(self, trackInfo, deltaTime):
@@ -452,7 +483,7 @@ class WPDisplay:
 
     def textBandTapped(self, position):
         return (self.textBandBottom is not None and self.textBandTop is not None and self.buttonsVisible()
-                and self.textBandTop <= position[1] <= self.textBandBottom)
+                and self.textBandTop <= position[1] <= self.textBandBottomEdge)
 
     # one or two lines of title sit on track_text_bottom, so the artist and album under it never move
     def placeTitle(self):
@@ -465,6 +496,10 @@ class WPDisplay:
             self.artistTextItem.posCenter = (self.artistTextItem.posCenter[0], self.artistBaseY - lift)
             self.albumTextItem.posCenter = (self.albumTextItem.posCenter[0], self.albumBaseY - lift)
         self.textBandTop = item.posCenter[1] - height // 2 - self.textBandPadding - lift
+        if self.textBandBottomMargin is not None:
+            lineBottom = max(self.artistTextItem.posCenter[1] + self.artistFont.get_height() // 2,
+                             self.albumTextItem.posCenter[1] + self.albumFont.get_height() // 2)
+            self.textBandBottomEdge = lineBottom + self.textBandBottomMargin
         # prev/next level with the title's middle: between its lines when it has two
         if self.skipButtonsFollowTitle:
             for button in (self.prevButton, self.nextButton):

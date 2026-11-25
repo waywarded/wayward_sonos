@@ -167,6 +167,9 @@ class WpClockDisplay:
     # see-through black behind the day, time and date: a band across the screen like now playing's, or a box
     def renderBacking(self, screen, kind, top, bottom, width):
         pad = self.backingPadding
+        # a band's soft edges are centred on its edges, half inside and half out, like now playing's
+        inset = self.backingFeather // 2 if kind == 'band' else 0
+        top, bottom = top + inset, bottom - inset
         if kind == 'box':
             rect = pygame.Rect(0, 0, width + pad * 4, bottom - top + pad * 2)
         else:

@@ -31,6 +31,9 @@ layout:
   # artist and album take turns under the title: each shows for its time, then fades out and the other fades in
   artist_show_time: 8
   album_show_time: 4
+  radio_show_time: 4       # a sub/wave station's show, after the album
+  radio_show_marks: ['» ', ' «']    # around the show line, so it doesn't read as an album
+  radio_show_host_font_asset: 'assets/PublicSans-Medium.ttf'    # "with Wren"; the show's name uses the album font
   artist_album_fade_time: 1.0
   artist_text_y: 561
   artist_text_width: 580
@@ -308,3 +311,6 @@ favorites:
   # radio streams only send "artist - title": look the song up in the music library for its album and art
   # (fallback_art when it isn't there, e.g. while the DJ talks)
   radio_library_art: true
+  # sub/wave stations: the show ("Sleepytime with Wren") from the station's own server, shown in turn with the
+  # artist and album. Any radio stream whose server answers /api/now-playing like sub/wave counts
+  radio_shows: true

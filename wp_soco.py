@@ -3,8 +3,9 @@ import logging
 from wp_app_status import WPAppStatus, WpAppState
 from wp_config import WPConfig
 from wp_sonos_cloud import WPSonosCloud, SonosCloudError
+from wp_subwave import WpSubwave
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import time
 import queue
 import random
@@ -57,9 +58,11 @@ class NowPlayingInfo:
     device_string :str = ""
     radio: bool = False         # a stream: no tracks to skip
     favorite: str = ""          # the favorite playing, if any, for favorites.fallback_art
+    show: str = ""              # a sub/wave station's show, "Sleepytime"
+    host: str = ""              # and its host, "Wren"
 
     @classmethod
-    def fromTrackInfo(cls, trackInfo, lineIn = False, transportState = 'STOPPED', deviceString = "", radio = False, favorite = ""):
+    def fromTrackInfo(cls, trackInfo, lineIn = False, transportState = 'STOPPED', deviceString = "", radio = False, favorite = "", show = "", host = ""):
         return cls(
             title=trackInfo.get("title", "Unknown Title"),
             artist=trackInfo.get("artist", "Unknown Artist"),
@@ -69,7 +72,9 @@ class NowPlayingInfo:
             line_in = lineIn,
             device_string=deviceString,
             radio = radio,
-            favorite = favorite
+            favorite = favorite,
+            show = show,
+            host = host
         )
 
     def isPlaying(self):
@@ -132,6 +137,7 @@ class WPSoco:
         self.shuffleArtists = config.getSubkey('favorites', 'artists', [])
         self.radioLibraryArt = config.getSubkey('favorites', 'radio_library_art', True)
         self.radioLookup = (None, None)     # ((artist, title), library track or None), so each song is looked up once
+        self.subwave = WpSubwave(self.subwaveShowChanged) if config.getSubkey('favorites', 'radio_shows', True) else None
         self.lastSpeakerIp = None     # for hasNetwork: the route to it shows whether this machine is on the network
         if config.getSubkey('favorites', 'load_via', 'local') == 'cloud':
             cloud = WPSonosCloud(timeout=config.getSubkey('connection', 'cloud_timeout', 30))
@@ -285,6 +291,7 @@ class WPSoco:
                 logging.INFO)
             uri = currentTrack.get('uri', '') or ''
             radio = coordinator.music_source_from_uri(uri) == MUSIC_SRC_RADIO
+            show, host = self.subwave.showFor(uri) if radio and self.subwave else ('', '')
             if radio and self.radioLibraryArt:
                 self.addLibraryDetails(currentTrack)
             self.status.setTrackInfo(
@@ -293,11 +300,18 @@ class WPSoco:
                                              transportState,
                                              deviceString=deviceStr,
                                              radio=radio,
-                                             favorite=self.favoriteForUri(uri)))
+                                             favorite=self.favoriteForUri(uri),
+                                             show=show, host=host))
             return True
         except Exception as e:
             self.status.log(f"Error fetching state: {e}", logging.ERROR)
             return False
+
+    # the show arrives after the song, from the sub/wave thread
+    def subwaveShowChanged(self, show):
+        info = self.status.latestTrackInfo
+        if info is not None and info.radio:
+            self.status.setTrackInfo(replace(info, show=show[0], host=show[1]))
 
     # radio streams send only "artist - title": take the album and its art from the same song in the music
     # library, if it's there (a station playing from the library, like Subwave via Navidrome)

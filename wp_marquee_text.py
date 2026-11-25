@@ -149,3 +149,45 @@ class WPMarqueeText:
                 self.draw_truncated_text(screen)
             else:
                 self.draw_scrolling_text(screen)
+
+# a marquee line drawn in runs of different fonts, [(text, font), ...], e.g. an italic show name then an upright host
+class WpRunsText(WPMarqueeText):
+    def setRuns(self, runs):
+        runs = [(text, font) for text, font in runs if text]
+        key = [(text, id(font)) for text, font in runs]
+        if key == getattr(self, 'runsKey', None):
+            return
+        self.runsKey = key
+        self.text = ''.join(text for text, _ in runs)
+        self.textSurf = self.renderRuns(runs, self.textColor) if runs else None
+        self.shadowSurf = self.renderRuns(runs, self.textShadowColor) if runs else None
+        self.isFirst = True
+        self.checkScroll()
+        self.resetScroll()
+
+    # each run sits on the line's shared baseline
+    def renderRuns(self, runs, color):
+        ascent = max(font.get_ascent() for _, font in runs)
+        height = max(ascent - font.get_descent() for _, font in runs)
+        surfs = [(font.render(text, True, color), font) for text, font in runs]
+        surf = pygame.Surface((sum(s.get_width() for s, _ in surfs), max(height, self.fontHeight)), pygame.SRCALPHA)
+        x = 0
+        for s, font in surfs:
+            surf.blit(s, (x, ascent - font.get_ascent()))
+            x += s.get_width()
+        return surf
+
+    def checkScroll(self):
+        self.textWidthPx = self.textSurf.get_width() if self.textSurf else 0
+        self.requiresScroll = self.textWidthPx > self.widthPx
+
+    def draw_centered_text(self, screen, text):
+        if not self.textSurf:
+            return
+        center = (screen.get_width() // 2, self.posCenter[1])
+        if self.shadow and self.shadowSurf:
+            self.shadowSurf.set_alpha(self.alpha)
+            offset = self.textShadowOffset
+            screen.blit(self.shadowSurf, self.shadowSurf.get_rect(center=(center[0] + offset[0], center[1] + offset[1])))
+        self.textSurf.set_alpha(self.alpha)
+        screen.blit(self.textSurf, self.textSurf.get_rect(center=center))

@@ -6,7 +6,7 @@ import os
 import subprocess
 from io import BytesIO
 from play_state_display import PlayStateDisplay, moveToward
-from wp_marquee_text import WPMarqueeText
+from wp_marquee_text import WPMarqueeText, WpRunsText
 from wp_autosplit_text import WpAutoSplitText
 from wp_app_state import WpAppState
 from wp_display_button import WPDisplayButton
@@ -112,6 +112,7 @@ class WPDisplay:
         # artist and album take turns in one spot, fading out and back in between
         self.artistShowTime = config.getSubkey('layout', 'artist_show_time', 8.0)
         self.albumShowTime = config.getSubkey('layout', 'album_show_time', 4.0)
+        self.radioShowTime = config.getSubkey('layout', 'radio_show_time', self.albumShowTime)
         self.artistAlbumFadeTime = config.getSubkey('layout', 'artist_album_fade_time', 0.4)
         self.artistAlpha = config.getSubkey('layout', 'artist_text_alpha', 255)
         self.albumAlpha = config.getSubkey('layout', 'album_text_alpha', 255)
@@ -126,6 +127,12 @@ class WPDisplay:
 
         self.albumFont = self.getFontForElement('album')
         self.albumTextItem = self.createMarqueeForElement('album', self.albumFont)
+        # a sub/wave station's show in the album's place: "» Sleepytime with Wren «", the show's name in the album's
+        # italic, the rest upright
+        self.showTextItem = self.createMarqueeForElement('album', self.albumFont, WpRunsText)
+        self.showHostFont = pygame.font.Font(config.getSubkey('layout', 'radio_show_host_font_asset', 'assets/PublicSans-Medium.ttf'),
+                                             config.getSubkey('layout', 'album_font_size', 24))
+        self.showMarks = config.getSubkey('layout', 'radio_show_marks', ['» ', ' «'])
 
         self.speakerFont = self.getFontForElement('speaker')
         self.speakerTextItem = self.createMarqueeForElement('speaker', self.speakerFont)
@@ -307,7 +314,7 @@ class WPDisplay:
         return item        
 
     
-    def createMarqueeForElement(self, itemName, font):
+    def createMarqueeForElement(self, itemName, font, kind=WPMarqueeText):
         centerX = self.screenSize//2
         centerY = self.config.getSubkey('layout', f'{itemName}_text_y', self.screenSize//2)
         doShadow = self.config.getSubkey('layout', f'{itemName}_text_shadow', False)
@@ -316,7 +323,7 @@ class WPDisplay:
 
         itemAlpha = self.config.getSubkey('layout', f'{itemName}_text_alpha', 255)
 
-        item = WPMarqueeText(self.config, self, font, (centerX, centerY), textWidth, doShadow, doStrip)
+        item = kind(self.config, self, font, (centerX, centerY), textWidth, doShadow, doStrip)
         item.setAlpha(itemAlpha)
         return item        
 
@@ -453,31 +460,33 @@ class WPDisplay:
             except Exception as e:
                 self.wpStatus.logSilent(f"Band colour: {e}")
 
-    # the artist, or the album for album_show_time of each cycle, faded out and in at the swaps
+    # the artist, then the album for album_show_time, then a radio show for radio_show_time, each faded out and
+    # in at the swaps
     def artistOrAlbum(self, trackInfo, deltaTime):
+        fade = self.artistAlbumFadeTime
         track = (trackInfo.title, trackInfo.artist, trackInfo.album)
         if track != self.artistAlbumTrack:
             self.artistAlbumTrack = track
-            self.artistAlbumTime = 0.0
-        if not trackInfo.album or trackInfo.album == trackInfo.artist:
+            self.artistAlbumTime = fade     # the first showing starts already faded in
+        turns = [(self.artistTextItem, self.artistAlpha, self.artistShowTime)]
+        if trackInfo.album and trackInfo.album != trackInfo.artist:
+            turns.append((self.albumTextItem, self.albumAlpha, self.albumShowTime))
+        if trackInfo.show:
+            turns.append((self.showTextItem, self.albumAlpha, self.radioShowTime))
+        if len(turns) == 1:
             self.artistTextItem.setAlpha(self.artistAlpha)
             return self.artistTextItem
 
-        fade = self.artistAlbumFadeTime
-        cycle = self.artistShowTime + self.albumShowTime + 4 * fade
+        cycle = sum(showTime + 2 * fade for _, _, showTime in turns)
         self.artistAlbumTime = (self.artistAlbumTime + deltaTime) % cycle
         t = self.artistAlbumTime
-        albumStart = self.artistShowTime + fade         # artist faded out, album fading in
-        albumEnd = albumStart + fade + self.albumShowTime + fade    # album faded out, artist fading in
-        if albumStart <= t < albumEnd:
-            item, alpha = self.albumTextItem, self.albumAlpha
-            sinceIn, untilOut = t - albumStart, albumEnd - t
-        else:
-            item, alpha = self.artistTextItem, self.artistAlpha
-            sinceIn = t - albumEnd if t >= albumEnd else t + fade   # the first showing starts already faded in
-            untilOut = albumStart - t if t < albumStart else cycle - t + albumStart
+        for item, alpha, showTime in turns:
+            length = showTime + 2 * fade
+            if t < length:
+                break
+            t -= length
         if fade > 0:
-            alpha = int(alpha * min(1.0, sinceIn / fade, untilOut / fade))
+            alpha = int(alpha * min(1.0, t / fade, (length - t) / fade))
         item.setAlpha(alpha)
         return item
 
@@ -495,6 +504,7 @@ class WPDisplay:
             item.posCenter = (item.posCenter[0], self.trackTextBottom - lift - height // 2)
             self.artistTextItem.posCenter = (self.artistTextItem.posCenter[0], self.artistBaseY - lift)
             self.albumTextItem.posCenter = (self.albumTextItem.posCenter[0], self.albumBaseY - lift)
+            self.showTextItem.posCenter = self.albumTextItem.posCenter
         self.textBandTop = item.posCenter[1] - height // 2 - self.textBandPadding - lift
         if self.textBandBottomMargin is not None:
             lineBottom = max(self.artistTextItem.posCenter[1] + self.artistFont.get_height() // 2,
@@ -529,6 +539,8 @@ class WPDisplay:
         self.artistTextItem.setText(self.streamStatus(trackInfo) or trackInfo.artist)
         self.albumTextItem.setText(trackInfo.album)
         self.albumTextItem.setScrollMode('scrolling')
+        self.showTextItem.setRuns(self.showRuns(trackInfo))
+        self.showTextItem.setScrollMode('scrolling')
         self.placeTitle()
         
         self.speakerTextItem.setText(trackInfo.device_string)
@@ -537,10 +549,19 @@ class WPDisplay:
         self.trackTextItem.update(deltaTime)
         self.artistTextItem.update(deltaTime)
         self.albumTextItem.update(deltaTime)
+        self.showTextItem.update(deltaTime)
         self.speakerTextItem.update(deltaTime)
 
         self.renderTextBand(deltaTime, (self.trackTextItem, self.artistOrAlbum(trackInfo, deltaTime)))
         self.speakerTextItem.render(self.screen)
+
+    def showRuns(self, trackInfo):
+        if not trackInfo.show:
+            return []
+        upright = self.showHostFont
+        before, after = (list(self.showMarks) + ['', ''])[:2]
+        host = [(' with ', upright), (trackInfo.host, upright)] if trackInfo.host else []
+        return [(before, upright), (trackInfo.show, self.albumFont)] + host + [(after, upright)]
 
     # a stopped stream has no title, and a starting one says ZPSTR_BUFFERING or ZPSTR_CONNECTING:
     # show the station's favorite name instead

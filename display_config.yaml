@@ -113,7 +113,7 @@ layout:
   clock_idle_time: 300
   clock_fade_time: 0.6     # leaving the clock, it fades out over now playing
   clock_time_font_size: 200
-  clock_time_font_asset: 'assets/FiraSans-Light.ttf'
+  clock_time_font_asset: 'assets/FiraSans-Regular.ttf'
   clock_day_font_size: 44
   clock_day_font_asset: 'assets/FiraSans-Regular.ttf'
   clock_date_font_size: 44
@@ -126,6 +126,18 @@ layout:
   clock_network_font_asset: 'assets/FiraSans-Regular.ttf'
   clock_network_y: 640
   clock_network_refresh: 30
+  # behind the clock, the last clock_art_count covers shown (kept in clock_art_folder), a new one every
+  # clock_art_interval seconds; the text gets a shadow, and goes dark when the cover is light behind it
+  clock_art_folder: 'art_cache'
+  clock_art_count: 40
+  clock_art_interval: 60
+  clock_art_fade: 2.0
+  clock_art_deepen: 255     # 0-255: darkens by multiplying the cover by itself, keeping colours rich
+  clock_art_dim: 50       # 0-255 of black over that, taming the bright parts
+  clock_art_light_threshold: 160      # 0-255 average brightness behind the text that counts as light
+  clock_shadow_offset: 2
+  clock_shadow_blur: 6     # how soft the shadow is, in pixels
+  clock_shadow_strength: 3     # layers of it: denser and darker
   favs_clock_button_pos: [265, 45]     # left of the Favorites title, mirroring refresh on the right
 
   log_font_size: 17

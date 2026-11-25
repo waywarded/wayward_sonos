@@ -41,3 +41,5 @@ logs/*.lock
 sonos_tokens.json
 # main room picked on the screen
 room_state.json
+# album art kept for the clock
+art_cache/

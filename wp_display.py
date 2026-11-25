@@ -16,6 +16,7 @@ from wp_volume_dial import WpVolumeDial
 from wp_command_feedback import WpCommandFeedback
 from wp_log_view import WpLogView
 from wp_clock_display import WpClockDisplay, clockIcon
+from wp_art_cache import WpArtCache
 from wp_soco import NowPlayingInfo
 
 from enum import Enum
@@ -222,7 +223,10 @@ class WPDisplay:
         self.roomsRefreshGap = config.getSubkey('layout', 'rooms_refresh_button_gap', 22)
 
         self.logView = WpLogView(config, self)
-        self.clockDisplay = WpClockDisplay(config, appStatus, self)
+        # album art as it's shown, for the clock's background
+        self.artCache = WpArtCache(config.getSubkey('layout', 'clock_art_folder', 'art_cache'),
+                                   config.getSubkey('layout', 'clock_art_count', 40))
+        self.clockDisplay = WpClockDisplay(config, appStatus, self, self.artCache)
         # the clock comes up after clock_idle_time seconds on now playing with nothing playing, or not connected
         self.clockIdleTime = config.getSubkey('layout', 'clock_idle_time', 300)
         self.idleTime = 0.0
@@ -349,6 +353,7 @@ class WPDisplay:
             self.trackArtSurface = self.scaleArt(albumArtImage)
             self.wpStatus.logSilent(f"Loaded album art from {artUrl}", logging.INFO)
             self.trackArtUrl = artUrl
+            self.artCache.save(response.content)
         except Exception as e:
             self.trackArtSurface = None
             self.wpStatus.log(f"Failed to load album art from {artUrl}: {e}", logging.ERROR)
@@ -985,6 +990,9 @@ class WPDisplay:
                         self.running = False
                     elif event.key == pygame.K_s:
                         self.requestScreenshot()
+                    # testing how the clock reads over different covers
+                    elif event.key == pygame.K_RIGHT and self.displayState == WpDisplayState.CLOCK:
+                        self.clockDisplay.skipArt()
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.handleTap(event.pos)

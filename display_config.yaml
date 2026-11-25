@@ -312,5 +312,6 @@ favorites:
   # (fallback_art when it isn't there, e.g. while the DJ talks)
   radio_library_art: true
   # sub/wave stations: the show ("Sleepytime with Wren") from the station's own server, shown in turn with the
-  # artist and album. Any radio stream whose server answers /api/now-playing like sub/wave counts
+  # artist and album, and each song's exact cover and album (ahead of radio_library_art, which is then only for
+  # songs it doesn't know). Any radio stream whose server answers /api/now-playing like sub/wave counts
   radio_shows: true

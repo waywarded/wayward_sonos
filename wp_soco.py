@@ -137,7 +137,7 @@ class WPSoco:
         self.shuffleArtists = config.getSubkey('favorites', 'artists', [])
         self.radioLibraryArt = config.getSubkey('favorites', 'radio_library_art', True)
         self.radioLookup = (None, None)     # ((artist, title), library track or None), so each song is looked up once
-        self.subwave = WpSubwave(self.subwaveShowChanged) if config.getSubkey('favorites', 'radio_shows', True) else None
+        self.subwave = WpSubwave(self.subwaveChanged) if config.getSubkey('favorites', 'radio_shows', True) else None
         self.lastSpeakerIp = None     # for hasNetwork: the route to it shows whether this machine is on the network
         if config.getSubkey('favorites', 'load_via', 'local') == 'cloud':
             cloud = WPSonosCloud(timeout=config.getSubkey('connection', 'cloud_timeout', 30))
@@ -292,7 +292,7 @@ class WPSoco:
             uri = currentTrack.get('uri', '') or ''
             radio = coordinator.music_source_from_uri(uri) == MUSIC_SRC_RADIO
             show, host = self.subwave.showFor(uri) if radio and self.subwave else ('', '')
-            if radio and self.radioLibraryArt:
+            if radio and not self.addSubwaveDetails(currentTrack) and self.radioLibraryArt:
                 self.addLibraryDetails(currentTrack)
             self.status.setTrackInfo(
                 NowPlayingInfo.fromTrackInfo(currentTrack,
@@ -307,11 +307,31 @@ class WPSoco:
             self.status.log(f"Error fetching state: {e}", logging.ERROR)
             return False
 
-    # the show arrives after the song, from the sub/wave thread
-    def subwaveShowChanged(self, show):
+    # a sub/wave station's own cover and album for the song: exact, where the library search is a guess.
+    # False when it doesn't know the song (yet: subwaveChanged fills it in if it turns up)
+    def addSubwaveDetails(self, currentTrack):
+        found = self.subwave.songFor(currentTrack.get('artist'), currentTrack.get('title')) if self.subwave else None
+        if found is None:
+            return False
+        currentTrack['album_art'] = found[0]
+        if not currentTrack.get('album'):
+            currentTrack['album'] = found[1]
+        return True
+
+    # from the sub/wave thread: a new show, or the playing song's cover turning up after the song did
+    def subwaveChanged(self):
         info = self.status.latestTrackInfo
-        if info is not None and info.radio:
-            self.status.setTrackInfo(replace(info, show=show[0], host=show[1]))
+        if info is None or not info.radio:
+            return
+        show, host = self.subwave.show
+        changes = {'show': show, 'host': host}
+        found = self.subwave.songFor(info.artist, info.title, fetch=False)
+        if found is not None:
+            changes['album_art_url'] = found[0]
+            if not info.album:
+                changes['album'] = found[1]
+        if any(getattr(info, key) != value for key, value in changes.items()):
+            self.status.setTrackInfo(replace(info, **changes))
 
     # radio streams send only "artist - title": take the album and its art from the same song in the music
     # library, if it's there (a station playing from the library, like Subwave via Navidrome)

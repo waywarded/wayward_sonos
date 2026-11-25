@@ -142,6 +142,7 @@ layout:
   clock_backing_alpha: 190
   clock_backing_padding: 20
   clock_backing_radius: 28     # the box's corners
+  clock_backing_feather: 40     # the band's top and bottom fade out over this many pixels; 0 for hard edges
   clock_hard_shadow_offset: 3     # the text's shadow on a backing
   clock_shadow_blur: 6     # how soft the shadow is, in pixels
   clock_shadow_strength: 3     # layers of it: denser and darker

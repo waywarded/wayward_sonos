@@ -56,6 +56,7 @@ class WpClockDisplay:
         self.backingAlpha = config.getSubkey('layout', 'clock_backing_alpha', 190)
         self.backingPadding = config.getSubkey('layout', 'clock_backing_padding', 20)
         self.backingRadius = config.getSubkey('layout', 'clock_backing_radius', 28)
+        self.backingFeather = config.getSubkey('layout', 'clock_backing_feather', 0)     # band only
         self.hardShadowOffset = config.getSubkey('layout', 'clock_hard_shadow_offset', 3)
         self.shadowBlur = config.getSubkey('layout', 'clock_shadow_blur', 6)
         self.shadowStrength = config.getSubkey('layout', 'clock_shadow_strength', 3)
@@ -179,6 +180,22 @@ class WpClockDisplay:
                 surf.fill((0, 0, 0, self.backingAlpha))
             self.surfaces[key] = surf
         screen.blit(self.surfaces[key], (self.screenSize // 2 - rect.width // 2, top - pad))
+        if kind == 'band' and self.backingFeather > 0:
+            edge = self.featherEdge(rect.width)
+            screen.blit(edge, (0, top - pad - self.backingFeather))
+            screen.blit(pygame.transform.flip(edge, False, True), (0, bottom + pad))
+
+    # the band's soft edge: from clear to its own darkness over clock_backing_feather pixels, eased so there's no line
+    def featherEdge(self, width):
+        key = ('feather', width, self.backingFeather)
+        if key not in self.surfaces:
+            surf = pygame.Surface((width, self.backingFeather), pygame.SRCALPHA)
+            for y in range(self.backingFeather):
+                t = (y + 0.5) / self.backingFeather
+                t = t * t * (3 - 2 * t)
+                pygame.draw.line(surf, (0, 0, 0, int(self.backingAlpha * t)), (0, y), (width, y))
+            self.surfaces[key] = surf
+        return self.surfaces[key]
 
     # the background, art or plain; returns whether what's behind the text is light
     def renderArt(self, screen):

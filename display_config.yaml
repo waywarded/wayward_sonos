@@ -309,6 +309,7 @@ favorites:
   # now-playing screen while that favorite plays
   fallback_art:
     'Home Radio': 'assets/HomeRadio.png'
+    'Good Tunes Radio': 'assets/HomeRadio.png'
   # radio streams only send "artist - title": look the song up in the music library for its album and art
   # (fallback_art when it isn't there, e.g. while the DJ talks)
   radio_library_art: true

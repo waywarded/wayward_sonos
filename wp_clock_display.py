@@ -366,3 +366,21 @@ def clockIcon(size, color=(255, 255, 255)):
         end = (center[0] + math.cos(rad) * radius * length, center[1] + math.sin(rad) * radius * length)
         pygame.draw.line(surf, color, center, end, 3 * scale)
     return pygame.transform.smoothscale(surf, (size, size))
+
+
+# a crescent moon for the favorites' dim button: filled while dimmed, an outline while not
+def moonIcon(size, filled=False, color=(255, 255, 255)):
+    scale = 4
+    big = size * scale
+    radius = big // 2 - 2 * scale
+    center = (big // 2, big // 2)
+    bite = (center[0] + radius * 0.55, center[1] - radius * 0.35)     # the circle taken out, up and to the right
+    disc = pygame.Surface((big, big), pygame.SRCALPHA)
+    pygame.draw.circle(disc, color, center, radius)
+    pygame.draw.circle(disc, (0, 0, 0, 0), bite, radius * 0.8)
+    if not filled:
+        inner = pygame.Surface((big, big), pygame.SRCALPHA)
+        pygame.draw.circle(inner, color, center, radius - 3 * scale)
+        pygame.draw.circle(inner, (0, 0, 0, 0), bite, radius * 0.8 + 3 * scale)
+        disc.blit(inner, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
+    return pygame.transform.smoothscale(disc, (size, size))

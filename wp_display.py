@@ -4,6 +4,7 @@ import logging
 import requests
 import os
 import subprocess
+import time
 from io import BytesIO
 from play_state_display import PlayStateDisplay, moveToward
 from wp_marquee_text import WPMarqueeText, WpRunsText
@@ -15,7 +16,7 @@ from wp_rooms_display import WpRoomsDisplay
 from wp_volume_dial import WpVolumeDial
 from wp_command_feedback import WpCommandFeedback
 from wp_log_view import WpLogView
-from wp_clock_display import WpClockDisplay, clockIcon
+from wp_clock_display import WpClockDisplay, clockIcon, moonIcon
 from wp_art_cache import WpArtCache
 from wp_art_color import bandColor
 from wp_soco import NowPlayingInfo
@@ -44,6 +45,17 @@ class WPDisplay:
         self.roundMask = roundMask
         self.roundMaskSurface = None
         self.screenshotRequested = False
+        # night: everything drawn darker between dim_start and dim_end (local time, may cross midnight)
+        self.dimStart = self.minutesOfDay(config.getSubkey('display', 'dim_start', None))
+        self.dimEnd = self.minutesOfDay(config.getSubkey('display', 'dim_end', None))
+        self.dimLevel = max(0, min(255, config.getSubkey('display', 'dim_level', 160)))
+        self.dimFadeTime = config.getSubkey('display', 'dim_fade_time', 3.0)
+        self.dimAmount = 0.0        # 0 bright to 1 fully dimmed, eased toward dimTarget
+        self.dimTarget = 0.0
+        self.dimScheduled = None    # what the hours say, checked once a minute
+        self.dimManual = None       # the favorites' moon button: holds until the hours next change
+        self.dimCheckedAt = None
+        self.dimSurface = None
 
         displayFlags = 0
         if (fullScreen):
@@ -265,6 +277,11 @@ class WPDisplay:
             clockIcon(clockButtonSize[0]),
             hitPadding=hitPadding
         )
+        # beside it, dimming on and off by hand: a filled moon while dimmed, an outline while not
+        dimButtonPos = config.getSubkey('layout', 'favs_dim_button_pos', [225, 45])
+        self.favsDimButtons = {dimmed: WPDisplayButton(dimButtonPos, clockButtonSize,
+                                                       moonIcon(clockButtonSize[0], filled=dimmed), hitPadding=hitPadding)
+                               for dimmed in (False, True)}
         self.favContentDisplay = WpFavContentDisplay(config, appStatus, self)
         self.roomsDisplay = WpRoomsDisplay(config, appStatus, self)
         self.volumeDial = WpVolumeDial(config, appStatus, self)
@@ -776,6 +793,7 @@ class WPDisplay:
             self.favsRefreshButton.setEnabled(not self.wpStatus.favsRefreshPending())
             self.favsRefreshButton.render(panel)
         self.favsClockButton.render(panel)
+        self.favsDimButtons[self.dimTarget > 0].render(panel)
 
     def isPlaying(self):
         trackInfo = self.wpStatus.latestTrackInfo
@@ -882,6 +900,7 @@ class WPDisplay:
         elif self.displayState == WpDisplayState.CLOCK:
             self.clockDisplay.render(self.screen)
         self.renderClockFade(deltaTime)
+        self.renderDim(deltaTime)
 
         if self.roundMask:
             self.renderRoundMask()
@@ -891,6 +910,49 @@ class WPDisplay:
         if self.screenshotRequested:
             self.screenshotRequested = False
             self.saveScreenshot()
+
+    # "HH:MM" -> minutes since midnight; None (dimming off) when missing or unreadable
+    def minutesOfDay(self, text):
+        try:
+            hours, minutes = str(text).split(':')
+            return (int(hours) * 60 + int(minutes)) % (24 * 60)
+        except (ValueError, AttributeError):
+            return None
+
+    def isDimTime(self, now=None):
+        if self.dimStart is None or self.dimEnd is None or self.dimStart == self.dimEnd:
+            return False
+        now = time.localtime(now)
+        minute = now.tm_hour * 60 + now.tm_min
+        if self.dimStart < self.dimEnd:
+            return self.dimStart <= minute < self.dimEnd
+        return minute >= self.dimStart or minute < self.dimEnd
+
+    # by hand, against whatever the hours say now; back on the hours at their next start or end
+    def toggleDim(self):
+        self.dimManual = not self.dimTarget > 0
+        self.dimTarget = 1.0 if self.dimManual else 0.0
+
+    def renderDim(self, deltaTime):
+        if self.dimCheckedAt is None or time.monotonic() - self.dimCheckedAt > 60:
+            self.dimCheckedAt = time.monotonic()
+            scheduled = self.isDimTime()
+            if scheduled != self.dimScheduled:
+                self.dimScheduled, self.dimManual = scheduled, None
+            dimmed = self.dimScheduled if self.dimManual is None else self.dimManual
+            self.dimTarget = 1.0 if dimmed else 0.0
+        if self.dimFadeTime > 0:
+            self.dimAmount = moveToward(self.dimAmount, self.dimTarget, deltaTime / self.dimFadeTime)
+        else:
+            self.dimAmount = self.dimTarget
+        alpha = int(self.dimLevel * self.dimAmount)
+        if alpha <= 0:
+            return
+        if self.dimSurface is None:
+            self.dimSurface = pygame.Surface(self.screen.get_size(), 0, 32)
+            self.dimSurface.fill((0, 0, 0))
+        self.dimSurface.set_alpha(alpha)
+        self.screen.blit(self.dimSurface, (0, 0))
 
     # dev aid: paint over everything outside the circle so a desktop window looks like the round Pi display
     def renderRoundMask(self):
@@ -1008,6 +1070,8 @@ class WPDisplay:
             self.wpStatus.requestFavsRefresh()
         elif self.favsClockButton.check_tap(position):
             self.openClock()
+        elif self.favsDimButtons[False].check_tap(position):
+            self.toggleDim()
         elif self.favContentDisplay.checkPageTap(position):
             pass
         elif self.favContentDisplay.checkTileTap(position):

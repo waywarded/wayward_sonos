@@ -9,6 +9,12 @@ display:
   line_in_track_image: "assets/lineIn02.png"
   line_in_track_name: "Record Player"
   resync_script: "resync_display.sh"     # "Fix screen" on the quit confirm: makes the panel re-sync (Pi only)
+  # night dimming, local time, checked once a minute; 'off' (or removing either) turns the hours off, leaving the
+  # moon button on favorites
+  dim_start: '00:00'
+  dim_end: '07:00'
+  dim_level: 100           # how much darker: 0 none to 255 black
+  dim_fade_time: 3.0       # seconds to ease in and out
 
 
 layout:
@@ -159,6 +165,7 @@ layout:
   clock_shadow_blur: 6     # how soft the shadow is, in pixels
   clock_shadow_strength: 3     # layers of it: denser and darker
   favs_clock_button_pos: [265, 45]     # left of the Favorites title, mirroring refresh on the right
+  favs_dim_button_pos: [225, 45]     # left of the clock button: night dimming on or off until the dim hours next start or end
 
   log_font_size: 17
   log_font_asset: 'assets/PublicSans-Medium.ttf'

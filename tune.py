@@ -24,11 +24,22 @@ SCREENS = {
         'm': ('margin', 'clock_backing_padding', 'space above and below the text in pixels'),
         'o': ('opacity', 'clock_backing_alpha', '0 see-through to 255 solid'),
     }),
+    'd': ('night dimming', {
+        's': ('start', 'dim_start', 'HH:MM, 24-hour, or off'),
+        'e': ('end', 'dim_end', 'HH:MM, 24-hour, or off'),
+        'l': ('level', 'dim_level', '0 none to 255 black'),
+    }),
 }
 
 
+def isTime(key):
+    return key in ('dim_start', 'dim_end')
+
+
+# a time is written quoted, '00:00' or 'off'; everything else is a bare whole number
 def pattern(key):
-    return re.compile(r'^(\s*' + re.escape(key) + r':\s*)(-?\d+)', re.M)
+    value = r"'?(\d{1,2}:\d{2}|off)'?" if isTime(key) else r'(-?\d+)'
+    return re.compile(r'^(\s*' + re.escape(key) + r':\s*)' + value, re.M)
 
 
 def current(key):
@@ -40,6 +51,8 @@ def current(key):
 def setValue(key, value):
     with open(CONFIG) as f:
         text = f.read()
+    if isTime(key):
+        value = f"'{value}'"
     text, count = pattern(key).subn(lambda m: m.group(1) + value, text, count=1)
     if count:
         with open(CONFIG, 'w') as f:
@@ -65,7 +78,7 @@ def main():
     while True:
         print()
         summary()
-        choice = ask("[n]ow playing, [c]lock, [t]int, [r]eset all to the repo's values, [q]uit: ")
+        choice = ask("[n]ow playing, [c]lock, [t]int, [d]imming, [r]eset all to the repo's values, [q]uit: ")
         if choice == 'q':
             break
         if choice == 'r':
@@ -84,11 +97,20 @@ def main():
             continue
         label, key, hint = settings[choice]
         value = ask(f"{name} {label} is {current(key)} ({hint}). New value: ")
-        if not re.fullmatch(r'-?\d+', value):
+        if isTime(key):
+            match = re.fullmatch(r'(\d{1,2}):?(\d{2})', value)
+            if value != 'off' and not (match and int(match[1]) < 24 and int(match[2]) < 60):
+                print("Not changed: needs a time like 23:30, or off.")
+                continue
+            if match:
+                value = f"{int(match[1]):02}:{match[2]}"
+        elif not re.fullmatch(r'-?\d+', value):
             print("Not changed: needs a whole number.")
             continue
         # margins can go below zero, to pull the band in over the text; the rest can't
-        if key.endswith('alpha'):
+        if isTime(key):
+            pass
+        elif key.endswith(('alpha', 'level')):
             value = str(max(0, min(255, int(value))))
         elif key.endswith('lightness'):
             value = str(max(0, min(100, int(value))))
